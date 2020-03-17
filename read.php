@@ -1,5 +1,5 @@
 <?php
-// rmbox/index.php - lecture d'un fichier mbox (https://fr.wikipedia.org/wiki/Mbox)
+// rmbox/read.php - lecture d'un fichier mbox (https://fr.wikipedia.org/wiki/Mbox)
 // Affichage des en-tetes
 
 $path = '0entrant';
@@ -42,6 +42,28 @@ if (0) { // Affichage des premières lignes avec la version dump - la fin de lig
   }
 }
 
-foreach (Message::parse($path) as $msg) {
-  echo json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
+//echo "argc=$argc, argv="; print_r($argv);
+if ($argc == 1) {
+  echo "usage: php $argv[0] <cmde> [<params>]\n";
+  echo "Les commandes:\n";
+  echo "  - list [{start} [{max}]]: liste les en-tetes à partir de {start} (défaut 0) avec maximum max messages (défaut 10)\n";
+  echo "  - get {Message-ID} : lit le message identifié par {Message-ID}\n";
+  die();
 }
+
+if ($argv[1] == 'list') {
+  foreach (Message::parse($path, [], $argv[2] ?? 0, $argv[3] ?? 10) as $msg) {
+    echo json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
+  }
+  die();
+}
+
+if ($argv[1] == 'get') {
+  if ($argc < 3)
+    die("Erreur paramètre obligatoire\n");
+  $msgs = Message::parse($path, ['Message-ID'=> "<$argv[2]>"], 0, 1);
+  echo json_encode(['header'=> $msgs[0]->short_header(), 'body'=> $msgs[0]->body()],
+    JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
+}
+
+die("Aucun traitement reconnu\n");
