@@ -5,20 +5,22 @@
 class Message {
   protected $header=[]; // dictionnaire des en-têtes, key -> liste(string)
   protected $body=[]; // texte correspondant au corps du message avec séparateur \n entre lignes
+  protected $offset; // offset du message dans le fichier
   
-  // analyse un fichier mbox et génère des messages respectant les critères
-  static function parse(string $path, array $criteria=[], int &$start=0, int $maxNbre=10): array {
+  // analyse un fichier mbox et retourne des messages respectant les critères
+  static function parse(string $path, int &$start=0, int $maxNbre=10, array $criteria=[]): array {
     $result = [];
     if (!($mbox = @fopen($path, 'r')))
       die("Erreur d'ouverture de mbox $path");
     $precLine = "initialisée <> '' pour éviter une détection sur la première ligne"; // la ligne précédente
     $msgTxt = []; // le message sous la forme d'une liste de lignes rtrimmed
     $no = 0;
-    while ($line = fgets($mbox)) {
-      $line = rtrim ($line, "\r\n");
-      if (($precLine == '') && (substr($line, 0, 4)=='From')) { // detection d'un nouveau message
+    $offset = 0; // offset de l'entegistrement courant
+    while ($iline = fgets($mbox)) {
+      $line = rtrim ($iline, "\r\n");
+      if (($precLine == '') && (substr($line, 0, 4) == 'From')) { // detection d'un nouveau message
         if ($no++ >= $start) {
-          $msg = new Message($msgTxt);
+          $msg = new Message($msgTxt, $offset);
           if ($msg->match($criteria))
             $result[] = $msg;
           if (count($result) >= $maxNbre) {
@@ -26,19 +28,41 @@ class Message {
             return $result;
           }
         }
-        if ($no > 1000) die("fin ligne ".__LINE__);
+        $offset = ftell($mbox) - strlen($iline);
+        //if ($no > 10000) die("fin ligne ".__LINE__);
         $msgTxt = [];
       }
       $msgTxt[] = $line; 
       $precLine = $line;
     }
+    $start = -1;
     return $result;
   }
   
+  // retourne le message commencant à l'offset défini
+  static function get(string $path, int $offset): self {
+    if (!($mbox = @fopen($path, 'r')))
+      die("Erreur d'ouverture de mbox $path");
+    fseek($mbox, $offset);
+    $precLine = "initialisée <> '' pour éviter une détection sur la première ligne"; // la ligne précédente
+    $msgTxt = []; // le message sous la forme d'une liste de lignes rtrimmed
+    while ($line = fgets($mbox)) {
+      $line = rtrim ($line, "\r\n");
+      if (($precLine == '') && (substr($line, 0, 4) == 'From')) { // detection d'un nouveau message
+        break;
+      }
+      $msgTxt[] = $line; 
+      $precLine = $line;
+    }
+    return (new Message($msgTxt, $offset));
+  }
+  
   function body() { return $this->body; }
+  function offset() { return $this->offset; }
     
-  function __construct(array $txt) {
+  function __construct(array $txt, int $offset) {
     //echo "Message::__construct()<br>\n";
+    $this->offset = $offset;
     //foreach ($txt as $line) echo "$line\n";
     $this->header[''] = [ array_shift($txt) ]; // Traitement de la première ligne d'en-tete
     $key = '';
@@ -72,7 +96,7 @@ class Message {
       if (isset($this->header[$key]))
         $short[$key] = $this->header[$key];
     }
-    return $short;
+    return array_merge($short,['offset'=>$this->offset]);
   }
   
   function asArray(): array { return ['header'=> $this->short_header(), 'body'=> $this->body]; }

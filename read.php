@@ -52,7 +52,7 @@ if ($argc == 1) {
 }
 
 if ($argv[1] == 'list') {
-  foreach (Message::parse($path, [], $argv[2] ?? 0, $argv[3] ?? 10) as $msg) {
+  foreach (Message::parse($path, $argv[2] ?? 0, $argv[3] ?? 10, []) as $msg) {
     echo json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
   }
   die();
@@ -61,7 +61,7 @@ if ($argv[1] == 'list') {
 if ($argv[1] == 'get') {
   if ($argc < 3)
     die("Erreur paramètre obligatoire\n");
-  $msgs = Message::parse($path, ['Message-ID'=> "<$argv[2]>"], 0, 1);
+  $msgs = Message::parse($path, 0, 1, ['Message-ID'=> "<$argv[2]>"]);
   echo json_encode(['header'=> $msgs[0]->short_header(), 'body'=> $msgs[0]->body()],
     JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
 }
