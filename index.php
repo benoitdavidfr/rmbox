@@ -66,6 +66,8 @@ class Message {
     }
     $this->body = $txt;
   }
+  
+  function asArray() { return ['header'=> $this->header, 'body'=> $this->body]; }
 }
 
 
@@ -76,6 +78,7 @@ while ($line = fgets($mbox)) {
   if (($precLine == '') && (substr($line, 0, 4)=='From')) { // detection d'un nouveau message
     $msg = new Message($msgTxt);
     print_r($msg);
+    echo json_encode($msg->asArray(), JSON_PRETTY_PRINT);
     die("FIN ligne ".__LINE__."\n");
     $msgTxt = [];
   }
