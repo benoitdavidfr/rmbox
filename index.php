@@ -1,13 +1,15 @@
 <?php
 // rmbox/index.php - lecture d'un fichier mbox (https://fr.wikipedia.org/wiki/Mbox)
-// Affichage des sujets
+// Affichage des en-tetes
 
 $path = '0entrant';
 
-if (!($mbox = @fopen($path,'r')))
-  die("Erreur d'ouverture de mbox");
+require_once __DIR__.'/mbox.inc.php';
 
 if (0) { // Affichage des premières lignes avec la version dump - la fin de ligne est \r\n
+  if (!($mbox = @fopen($path,'r')))
+    die("Erreur d'ouverture de mbox");
+
   $line = "\r\n";
   echo "<table border=1>\n";
   for($i=0; $i< strlen($line); $i++) {
@@ -40,49 +42,6 @@ if (0) { // Affichage des premières lignes avec la version dump - la fin de lig
   }
 }
 
-class Message {
-  protected $header=[]; // dictionnaire des en-têtes, key -> liste(string)
-  protected $body=[]; // liste de lignes correspondant au corps du message
-  
-  function __construct(array $txt) {
-    echo "Message::__construct()<br>\n";
-    foreach ($txt as $line)
-      echo "$line\n";
-    $this->header[''] = [ array_shift($txt) ]; // Traitement de la première ligne d'en-tete
-    $key = '';
-    while ($line = array_shift($txt)) { // le header s'arrête à la première ligne vide
-      if (in_array(substr($line, 0, 1), ["\t", ' '])) {
-        $this->header[$key][count($this->header[$key])-1] .= ' '.substr($line, 1);
-      }
-      else {
-        $pos = strpos($line, ':');
-        $key = substr($line, 0, $pos);
-        if (!isset($this->header[$key]))
-          $this->header[$key] = [ $line ];
-        else
-          $this->header[$key][] = $line;
-      }
-      //echo "line=$line\n"; print_r($this);
-    }
-    $this->body = $txt;
-  }
-  
-  function asArray() { return ['header'=> $this->header, 'body'=> $this->body]; }
+foreach (Message::parse($path) as $msg) {
+  echo json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
 }
-
-
-$precLine = "initialisée <> '' pour éviter une détection sur la première ligne"; // la ligne précédente
-$msgTxt = []; // le message sous la forme d'une liste de lignes rtrimmed
-while ($line = fgets($mbox)) {
-  $line = rtrim ($line, "\r\n");
-  if (($precLine == '') && (substr($line, 0, 4)=='From')) { // detection d'un nouveau message
-    $msg = new Message($msgTxt);
-    print_r($msg);
-    echo json_encode($msg->asArray(), JSON_PRETTY_PRINT);
-    die("FIN ligne ".__LINE__."\n");
-    $msgTxt = [];
-  }
-  $msgTxt[] = $line; 
-  $precLine = $line;
-}
-
