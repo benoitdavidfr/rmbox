@@ -7,7 +7,7 @@ class Message {
   protected $body=[]; // texte correspondant au corps du message avec séparateur \n entre lignes
   
   // analyse un fichier mbox et génère des messages respectant les critères
-  static function parse(string $path, array $criteria=[], int $start=0, int $maxNbre=10): array {
+  static function parse(string $path, array $criteria=[], int &$start=0, int $maxNbre=10): array {
     $result = [];
     if (!($mbox = @fopen($path, 'r')))
       die("Erreur d'ouverture de mbox $path");
@@ -21,9 +21,12 @@ class Message {
           $msg = new Message($msgTxt);
           if ($msg->match($criteria))
             $result[] = $msg;
-          if (count($result) >= $maxNbre)
+          if (count($result) >= $maxNbre) {
+            $start = $no;
             return $result;
+          }
         }
+        if ($no > 1000) die("fin ligne ".__LINE__);
         $msgTxt = [];
       }
       $msgTxt[] = $line; 
@@ -33,7 +36,7 @@ class Message {
   }
   
   function body() { return $this->body; }
-  
+    
   function __construct(array $txt) {
     //echo "Message::__construct()<br>\n";
     //foreach ($txt as $line) echo "$line\n";
@@ -54,6 +57,12 @@ class Message {
       }
       //echo "line=$line\n"; print_r($this);
     }
+    foreach ($this->header as $key => $values) {
+      foreach ($values as $i => $atom) {
+        //echo "atom=",htmlentities($atom),"<br>\n";
+        $this->header[$key][$i] = @iconv_mime_decode($atom);
+      }
+    }
     $this->body = implode("\n", $txt);
   }
   
@@ -70,13 +79,22 @@ class Message {
   
   // conjonction des différents critères
   function match(array $criteria): bool {
-    foreach ($criteria as $key => $value) {
+    foreach ($criteria as $key => $cvalue) {
       if ($key == 'Message-ID') {
-        if ($this->header['Message-ID'][0] <> $value)
+        if ($this->header['Message-ID'][0] <> $cvalue)
           return false;
       }
       else {
-        throw new Exception("Critère non traité");
+        //echo "test match<br>\n";
+        if (!isset($this->header[$key]))
+          return false;
+        $res = false;
+        foreach ($this->header[$key] as $hvalstr) {
+          if (preg_match("!$cvalue!", $hvalstr))
+            $res = true;
+        }
+        if (!$res)
+          return false;
       }
     }
     return true;
