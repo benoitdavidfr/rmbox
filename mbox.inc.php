@@ -95,7 +95,9 @@ class Message {
       return $this->body;
     if ($ctEncoding == 'base64')
       return base64_decode($this->body);
-    echo "Warning: dans Message::body() Content-Transfer-Encoding == $ctEncoding inconnu<br>\n";
+    if ($ctEncoding == 'quoted-printable')
+      return quoted_printable_decode($this->body);
+    echo "Warning: dans Message::body() Content-Transfer-Encoding == '$ctEncoding' inconnu<br>\n";
     return $this->body;
   }
   

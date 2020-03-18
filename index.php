@@ -8,7 +8,8 @@ doc: |
   - affichage de la liste des Content-Type et des messages correspondants à chacun
 journal: |
   18/3/2020:
-    initialisation
+    - initialisation
+    - code testé pour les différents formats présents en dehors des multipart
 */
 ini_set('max_execution_time', 600);
 $path = '0entrant';
@@ -117,6 +118,13 @@ function showBody(string $body, string $contentType=''): string {
     return '<pre>'.htmlentities($body).'</pre>';
   }
   
+  if (preg_match('!^text/html; charset="?([-a-zA-Z0-9]*)!', $contentType, $matches)) {
+    $charset = $matches[1];
+    if (!in_array($charset, ['utf-8','UTF-8']))
+      $body = mb_convert_encoding($body, 'utf-8', $charset);
+    return $body;
+  }
+  
   if (preg_match('!^multipart/(alternative|related); boundary="([^"]*)"!', $contentType, $matches)) {
     $boundary = $matches[2];
     $newBody = '';
@@ -138,10 +146,10 @@ if ($_GET['action'] == 'get') { // affiche un message donné défini par son off
   echo "<tr><td>From</td><td>",htmlentities($header['From']),"</td></tr>\n";
   echo "<tr><td>To</td><td>",htmlentities($header['To']),"</td></tr>\n";
   echo "<tr><td>Subject</td><td>",htmlentities($header['Subject']),"</td></tr>\n";
-  echo "<tr><td>Content-Type</td><td>",htmlentities($header['Content-Type']),"</td></tr>\n";
+  echo "<tr><td>Content-Type</td><td>",htmlentities($header['Content-Type'] ?? 'Non défini'),"</td></tr>\n";
   if (isset($header['Content-Transfer-Encoding']) && ($header['Content-Transfer-Encoding'] <> '8bit'))
     echo "<tr><td>Content-Transfer-Encoding</td><td>",htmlentities($header['Content-Transfer-Encoding']),"</td></tr>\n";
-  echo "<tr><td>Body</td><td>",showBody($msg->body(), $header['Content-Type']),"</td></tr>\n";
+  echo "<tr><td>Body</td><td>",showBody($msg->body(), $header['Content-Type'] ?? ''),"</td></tr>\n";
   echo "</table>\n";
   echo "<a href='?action=dump&amp;offset=$_GET[offset]'>dump</a><br>\n";
   die();
