@@ -91,7 +91,7 @@ class Message {
   */
   function body(): string {
     $ctEncoding = $this->header['Content-Transfer-Encoding'][0] ?? null;
-    if (!$ctEncoding || ($ctEncoding == '8bit'))
+    if (!$ctEncoding || ($ctEncoding == '8bit') || ($ctEncoding == '7bit'))
       return $this->body;
     if ($ctEncoding == 'base64')
       return base64_decode($this->body);

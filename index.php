@@ -54,7 +54,8 @@ if (!isset($_GET['action'])) { // par défaut liste les messages
     }
     echo "'>$start &gt;<br>\n";
   }
-  echo "<a href='?action=listContentType&max=1000'>listContentType</a><br>\n";
+  echo "<a href='?action=listContentType&amp;max=1000'>listContentType</a><br>\n";
+  echo "<a href='?action=count'>count</a><br>\n";
   die();
 }
 
@@ -204,6 +205,17 @@ if ($_GET['action'] == 'searchByContentType') {
     echo "</tr>\n";
   }
   echo "</table>\n";
+  die();
+}
+
+// 15164 messages
+if ($_GET['action'] == 'count') {
+  $start = 0;
+  $nbre = 0;
+  foreach (Message::parse($path, $start, 1000000) as $msg) {
+    $nbre++;
+  }
+  echo "$nbre messages<br>\n";
   die();
 }
 
