@@ -1,6 +1,12 @@
 <?php
-// rmbox/read.php - lecture d'un fichier mbox (https://fr.wikipedia.org/wiki/Mbox)
-// Affichage des en-tetes
+/*PhpDoc:
+name: read.php
+title: index.php - lecture d'un fichier Mbox (https://fr.wikipedia.org/wiki/Mbox)
+doc: |
+journal: |
+  18/3/2020:
+    initialisation
+*/
 
 $path = '0entrant';
 

@@ -1,0 +1,18 @@
+title: rmbox - lecture d'un fichier mbox
+path: /rmbox
+doc: |
+  Lecture d'un fichier Mbox (https://fr.wikipedia.org/wiki/Mbox) généré notamment par Thunderbird
+  Décodage des messages présents dans le fichier.
+  Affichage de la liste des messages correspondant à certains critères.
+  Affichage d'un  message particulier et notamment accès aux pièces jointes.
+journal: |
+  18/3/2020:
+    - initialisation
+submodules:
+phpScripts:
+  - /rmbox/index.php
+  - /rmbox/read.php
+phpIncludes:
+  - /rmbox/mbox.inc.php
+htmlFiles:
+
