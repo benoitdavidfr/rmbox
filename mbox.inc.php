@@ -142,7 +142,6 @@ class MonoPart extends Body {
 
 // Corps composé de plusieurs parties, chacune étant un corps
 abstract class MultiPart extends Body {
-  
   // renvoie la boundary déduite du Content_Type
   function boundary(): string {
     if (preg_match('!^multipart/(mixed|alternative|related); +boundary="([^"]*)"!', $this->type, $matches))
