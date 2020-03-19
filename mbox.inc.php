@@ -1,13 +1,219 @@
 <?php
 /*PhpDoc:
 name: mbox.inc.php
-title: mbox.inc.php - définition de la classe Message pour gérer les messages d'un fichier Mbox
+title: mbox.inc.php - définition de classes pour gérer les messages d'un fichier Mbox dont la classe Message
 doc: |
+  message ::= header+ + body
+  header ::= content-type | Content-Transfer-Encoding | ...
+  body ::= monoPart | multiPart
+  monoPart ::= content-type + Content-Transfer-Encoding + contents
+  content-type ::= string
+  Content-Transfer-Encoding ::= string
+  contents  ::= chaine d'octets
+  multiPart ::= mixed | alternative | related | report
+  mixed     ::= body + attachment+
+  attachment ::= content-type + name + contents
+  alternative ::= body+
+  related  ::= text/html + inlineimage+
+  inlineimage ::= content-type + Content-ID + contents
 journal: |
+  19/3/2020:
+    - refonte de la gestion des messages multi-parties avec la hiérarchie de classe Body
+    - fonctionne sur http://localhost/rmbox/?action=get&offset=1475300
   18/3/2020:
     - prise en compte de l'en-tête Content-Transfer-Encoding dans la lecture du corps du message
 classes:
 */
+
+
+// Corps d'un message ou partie
+abstract class Body {
+  protected $type; // le type de contenu = type MIME - string
+  protected $headers=[]; // [ string ] - les autres en-têtes
+  protected $contents; // le contenu comme chaine d'octets évent. décodé en fonction de Content-Transfer-Encoding - string
+  
+  // crée un nouveau Body en fonction du type, les headers complémentaires sont utilisés pour les parties de multi-parties
+  static function create(string $type, string $contents, array $headers=[]): Body {
+    if (substr($type, 0, 15) == 'multipart/mixed')
+      return new Mixed($type, $contents);
+    elseif (substr($type, 0, 21) == 'multipart/alternative')
+      return new Alternative($type, $contents);
+    elseif (substr($type, 0, 17) == 'multipart/related')
+      return new Related($type, $contents);
+    else
+      return new MonoPart($type, $contents);
+  }
+  
+  // retire les headers et les renvoient séparés sous la forme [ key => value ]
+  static function extractHeaders(array &$text): array {
+    $headers = [];
+    $key = '';
+    while ($line = array_shift($text)) { // les headers s'arrête à la première ligne vide
+      if (!in_array(substr($line, 0, 1), ["\t", ' '])) {
+        $pos = strpos($line, ': ');
+        $key = substr($line, 0, $pos);
+        $line = substr($line, $pos+2);
+        if (isset($headers[$key]))
+          echo "headers[$key] == ",$headers[$key]," && = $line<br>\n";
+        $headers[$key] = $line;
+      }
+      else {
+        $headers[$key] .= ' '.substr($line, 1);
+      }
+      //echo "line=$line\n"; print_r($this);
+    }
+    return $headers;
+  }
+  
+  // construit un body défini par un texte passé sous la forme d'une liste de chaines qui commence par une liste de headers
+  static function createFromPart(array $text): Body {
+    //echo "<pre>Body::newFromPart(text="; print_r($text); echo ")</pre>\n";
+    if (!$text) {
+      //echo "<b>return</b> empty Body<br>\n";
+      return new MonoPart('', '');
+    }
+    $headers = Body::extractHeaders($text);
+    $type = $headers['Content-Type'] ?? '';
+    unset($headers['Content-Type']);
+    if (preg_match('!^multipart/(mixed|alternative|related); +boundary="([^"]*)"!', $type)) {
+      //echo "<b>return</b> Body::new($type, text)<br>\n";
+      return Body::create($type, implode("\n", $text), $headers);
+    }
+    else {
+      //echo "<b>return</b> MonoPart()<br>\n";
+      return new MonoPart($type, implode("\n", $text), $headers);
+    }
+  }
+  
+  // recopie les 3 paramètres dans les champs de l'objet
+  function __construct(string $type, string $contents, array $headers=[]) {
+    //echo "Body::__construct(type=$type, contents, headers)<br>\n";
+    $this->type = $type;
+    $this->contents = $contents;
+    $this->headers = $headers;
+  }
+
+  // chaque objet doit être capable de s'afficher sous la forme d'un texte HTML
+  abstract function asHtml(): string;
+};
+
+// Corps en une seule partie
+class MonoPart extends Body {
+  // retourne le code Html d'affichage de l'objet
+  function asHtml(): string {
+    if (($this->type == '') && ($this->contents == ''))
+      return "Empty MonoPart\n";
+    elseif (preg_match('!^text/(plain|html); charset="?([-a-zA-Z0-9]*)!', $this->type, $matches)) {
+      $format = $matches[1];
+      $charset = $matches[2];
+      $html = "<table border=1>\n";
+      $html .= '<tr><td>Content-Type</td><td>'.$this->type."</td></tr>\n";
+      foreach ($this->headers as $key => $value)
+        $html .= "<tr><td>$key</td><td>$value</td></tr>\n";
+      $ctEncoding = $this->headers['Content-Transfer-Encoding'] ?? null;
+      if (!$ctEncoding || ($ctEncoding == '8bit') || ($ctEncoding == '7bit'))
+        $contents = $this->contents;
+      elseif ($ctEncoding == 'base64')
+        $contents = base64_decode($this->contents);
+      elseif ($ctEncoding == 'quoted-printable')
+        $contents = quoted_printable_decode($this->contents);
+      else {
+        $html .= "<tr><td colspan=2>Warning: dans Message::body() Content-Transfer-Encoding == '$ctEncoding' inconnu</td></tr>\n";
+        $contents = $this->contents;
+      }
+      if (!in_array($charset, ['utf-8','UTF-8']))
+        $contents = mb_convert_encoding($contents, 'utf-8', $charset);
+      if ($format=='plain')
+        $html .= '<tr><td>contents</td><td><pre>'.htmlentities($contents).'</pre></td></tr>';
+      else // html
+        $html .= "<tr><td>contents</td><td>$contents</td></tr>\n";
+      $html .= "</table>\n";
+      return $html;
+    }
+    elseif (preg_match('!^(application/pdf); name="([^"]+)"$!', $this->type, $matches)) {
+      return "Attachment type $matches[1], name=\"$matches[2]\"\n";
+    }
+    else {
+      return "<b>Unknown Content-Type '$this->type'</b>"
+        .'<pre>'.htmlentities($this->contents).'</pre>';
+    }
+  }
+};
+
+// Corps composé de plusieurs parties, chacune étant un corps
+abstract class MultiPart extends Body {
+  
+  // renvoie la boundary déduite du Content_Type
+  function boundary(): string {
+    if (preg_match('!^multipart/(mixed|alternative|related); +boundary="([^"]*)"!', $this->type, $matches))
+      return $matches[2];
+    else
+      throw new Exception("MultiPart::boundary() impossible sur type='".$this->type."'");
+  }
+  
+  // décompose le contenu en chacune des parties
+  function parts(): array { // retourne un [ Body ]
+    $text = explode("\n", $this->contents);
+    $parts = []; // [ Body ]
+    $part = []; // [ string ]
+    foreach ($text as $line) {
+      if (strpos($line, $this->boundary()) !== FALSE) {
+        $parts[] = Body::createFromPart($part);
+        $part = [];
+      }
+      else {
+        $part[] = $line;
+      }
+    }
+    //$parts[] = Body::createFromPart($part); // La dernière partie semble systématiquement vide
+    array_shift($parts); // La première partie est vide ou inutile
+    //echo "<pre>parts="; print_r($parts); echo "</pre>\n";
+    return $parts;
+  }
+  
+  /*function asHtml(): string {
+    //return 'MultiPart::asHtml()'.'<pre>'.htmlentities($this->contents).'</pre>';
+    $html = "MultiPart::asHtml()<br>\n";
+    $html .= "<table border=1>\n";
+    foreach ($this->parts() as $part) {
+      $html .= "<tr><td>".$part->asHtml()."</td></tr>\n";
+    }
+    $html .= "</table>\n";
+    return $html;
+  }*/
+};
+
+// Typiquement un texte de message avec des fichiers attachés
+class Mixed extends MultiPart {
+  function asHtml(): string {
+    $html = "Mixed::asHtml()<br>\n";
+    $html .= "<table border=1>\n";
+    foreach ($this->parts() as $part) {
+      $html .= "<tr><td>".$part->asHtml()."</td></tr>\n";
+    }
+    $html .= "</table>\n";
+    return $html;
+  }
+};
+
+// Typiquement un texte de message en plain/text et en Html
+class Alternative extends MultiPart {
+  function asHtml(): string {
+    $html = "Alternative::asHtml()<br>\n";
+    $html .= "<table border=1>\n";
+    foreach ($this->parts() as $part) {
+      $html .= "<tr><td>".$part->asHtml()."</td></tr>\n";
+    }
+    $html .= "</table>\n";
+    return $html;
+  }
+};
+
+// Typiquement un texte Html avec des images associées en ligne
+class Related extends MultiPart {
+  function asHtml(): string { return 'Related::asHtml()'; }
+};
+
 
 /*PhpDoc: classes
 name: Message
@@ -86,19 +292,22 @@ class Message {
   
   /*PhpDoc: methods
   name: body
-  title: "function body(): string - retourne le corps du message en appliquant éventuellement la transformation définie par l'en-tête Content-Transfer-Encoding"
+  title: "function body(): Body - retourne le corps du message
   doc: |
   */
-  function body(): string {
+  function body(): Body {
     $ctEncoding = $this->header['Content-Transfer-Encoding'][0] ?? null;
     if (!$ctEncoding || ($ctEncoding == '8bit') || ($ctEncoding == '7bit'))
-      return $this->body;
-    if ($ctEncoding == 'base64')
-      return base64_decode($this->body);
-    if ($ctEncoding == 'quoted-printable')
-      return quoted_printable_decode($this->body);
-    echo "Warning: dans Message::body() Content-Transfer-Encoding == '$ctEncoding' inconnu<br>\n";
-    return $this->body;
+      $contents = $this->body;
+    elseif ($ctEncoding == 'base64')
+      $contents = base64_decode($this->body);
+    elseif ($ctEncoding == 'quoted-printable')
+      $contents = quoted_printable_decode($this->body);
+    else {
+      echo "Warning: dans Message::body() Content-Transfer-Encoding == '$ctEncoding' inconnu<br>\n";
+      $contents = $this->body;
+    }
+    return Body::create($this->header['Content-Type'][0], $contents);
   }
   
   /*PhpDoc: methods

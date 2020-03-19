@@ -46,8 +46,11 @@ list:
       [41] => text/html; charset="Windows-1252"
   )
   
-Content-Type:
-  multipart/related:
+multipart:
+  title: Le différents types multipart
+  mixed:
+    doc: TEXT and attachments.
+  related:
     doc: |
       semble signifier que les parties sont reliées
       par exemple un texte HTML peut contenir des images
@@ -59,7 +62,59 @@ Content-Type:
         Content-ID: <part1.F824B868.67530DC1@developpement-durable.gouv.fr>
         
     href: http://localhost/rmbox/?action=get&offset=15410185
-  multipart/alternative:
-    doc: |
-      alternative entre 2 documents
+  alternative:
+    doc: alternative entre 2 documents
     href: http://localhost/rmbox/?action=get&offset=15470413
+  report:
+    doc: |
+      similaire à un mixed mais destiné à transmettre des rapports qui puissent être traités automatiquement
+      L'idée de base de multipart/report est de pouvoir faire des messages à propos des messages.
+      Par exemple, un avis de non-remise (RFC 3461) est un message disant qu'un message n'a pu être remis, et intégrant le message
+      originel. Un rapport ARF (RFC 5965) est un message disant qu'un message est abusif (spam, par exemple) et intégrant également
+      le message originel. D'où l'idée d'avoir un type commun pour tous ces « messages sur les messages »,
+      et c'est multipart/report, normalisé dans notre RFC 6522, qui succède au RFC 3462 (qui succédait lui-même au RFC 1892).
+      Ce type multipart/report est très largement utilisé depuis longtemps, et par de nombreux logiciels.
+    rfc: https://tools.ietf.org/html/rfc3462
+
+imbriqués:
+  title: exemple d'imbrication mixed (pour des attachements), related (pour des inlineimages) et alternative pour une version html et une autre plain text)
+  ref: https://stackoverflow.com/questions/3902455/mail-multipart-alternative-vs-multipart-mixed
+  example:
+    mixed:
+      related:
+        alternative:
+          text/plain:
+          text/html:
+        inlineImage:
+        inlineImage:
+      attachment:
+      attachment:
+
+examples:
+  http://localhost/rmbox/?action=get&offset=71055:
+    mixed:
+      alternative:
+        text/plain:
+        related:
+          text/html:
+          image/png:
+          image/png:
+      attachment:
+        
+structure: |
+  message ::= header+ + body
+  header ::= content-type | Content-Transfer-Encoding | ...
+  body ::= monoPart | multiPart
+  monoPart ::= content-type + Content-Transfer-Encoding + contents
+  content-type ::= string
+  Content-Transfer-Encoding ::= string
+  contents  ::= chaine d'octets
+  multiPart ::= mixed | alternative | related | report
+  mixed     ::= body + attachment+
+  attachment ::= content-type + name + contents
+  alternative ::= body+
+  related  ::= text/html + inlineimage+
+  inlineimage ::= content-type + Content-ID + contents
+
+
+
