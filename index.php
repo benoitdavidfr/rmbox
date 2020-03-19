@@ -7,6 +7,8 @@ doc: |
   - affichage d'un message particulier avec notamment accès aux pièces-jointes
   - affichage de la liste des Content-Type et des messages correspondants à chacun
 journal: |
+  19/3/2020:
+    - refonte de la gestion eds multiparts transférée dans mbox.inc.php
   18/3/2020:
     - initialisation
     - code testé pour les différents formats présents en dehors des multipart
