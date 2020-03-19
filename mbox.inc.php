@@ -20,6 +20,7 @@ journal: |
   19/3/2020:
     - refonte de la gestion des messages multi-parties avec la hiérarchie de classe Body
     - fonctionne sur http://localhost/rmbox/?action=get&offset=1475300
+    - affichage des images en dehors du fichier HTML
   18/3/2020:
     - prise en compte de l'en-tête Content-Transfer-Encoding dans la lecture du corps du message
 classes:
@@ -28,6 +29,7 @@ classes:
 
 // Corps d'un message ou partie
 abstract class Body {
+  static $debug = false;
   protected $type; // le type de contenu = type MIME - string
   protected $headers=[]; // [ string ] - les autres en-têtes
   protected $contents; // le contenu comme chaine d'octets évent. décodé en fonction de Content-Transfer-Encoding - string
@@ -106,10 +108,13 @@ class MonoPart extends Body {
     elseif (preg_match('!^text/(plain|html); charset="?([-a-zA-Z0-9]*)!', $this->type, $matches)) {
       $format = $matches[1];
       $charset = $matches[2];
-      $html = "<table border=1>\n";
-      $html .= '<tr><td>Content-Type</td><td>'.$this->type."</td></tr>\n";
-      foreach ($this->headers as $key => $value)
-        $html .= "<tr><td>$key</td><td>$value</td></tr>\n";
+      $html = '';
+      if (Body::$debug) {
+        $html .= "<table border=1>\n";
+        $html .= '<tr><td>Content-Type</td><td>'.$this->type."</td></tr>\n";
+        foreach ($this->headers as $key => $value)
+          $html .= "<tr><td>$key</td><td>$value</td></tr>\n";
+      }
       $ctEncoding = $this->headers['Content-Transfer-Encoding'] ?? null;
       if (!$ctEncoding || ($ctEncoding == '8bit') || ($ctEncoding == '7bit'))
         $contents = $this->contents;
@@ -118,19 +123,45 @@ class MonoPart extends Body {
       elseif ($ctEncoding == 'quoted-printable')
         $contents = quoted_printable_decode($this->contents);
       else {
+        if (!Body::$debug) {
+          $html .= "<table border=1>\n";
+          $html .= '<tr><td>Content-Type</td><td>'.$this->type."</td></tr>\n";
+          foreach ($this->headers as $key => $value)
+            $html .= "<tr><td>$key</td><td>$value</td></tr>\n";
+          Body::$debug = true;
+        }
         $html .= "<tr><td colspan=2>Warning: dans Message::body() Content-Transfer-Encoding == '$ctEncoding' inconnu</td></tr>\n";
         $contents = $this->contents;
       }
       if (!in_array($charset, ['utf-8','UTF-8']))
         $contents = mb_convert_encoding($contents, 'utf-8', $charset);
-      if ($format=='plain')
-        $html .= '<tr><td>contents</td><td><pre>'.htmlentities($contents).'</pre></td></tr>';
-      else // html
-        $html .= "<tr><td>contents</td><td>$contents</td></tr>\n";
-      $html .= "</table>\n";
+      if ($format=='plain') {
+        if (Body::$debug)
+          $html .= '<tr><td>contents</td><td><pre>'.htmlentities($contents).'</pre></td></tr>';
+        else
+          $html .= '<pre>'.htmlentities($contents).'</pre>';
+      }
+      else { // if ($format=='html')
+        if (Body::$debug)
+          $html .= "<tr><td>contents</td><td>$contents</td></tr>\n";
+        else
+          $html .= $contents;
+      }
+      if (Body::$debug)
+        $html .= "</table>\n";
       return $html;
     }
-    elseif (preg_match('!^(application/pdf); name="([^"]+)"$!', $this->type, $matches)) {
+    elseif (preg_match('!^(image/(png|jpeg|gif))!', $this->type, $matches)) {
+      $type = $matches[1];
+      $ctEncoding = $this->headers['Content-Transfer-Encoding'] ?? null;
+      if ($ctEncoding == 'base64') {
+        return "<img src=\"data:$type;base64,".$this->contents."\">";
+      }
+      else {
+        return "Warning: dans Message::body() Content-Transfer-Encoding == '$ctEncoding' inconnu\n";
+      }
+    }
+    elseif (preg_match('!^(application/(pdf|msword)); name="([^"]+)"$!', $this->type, $matches)) {
       return "Attachment type $matches[1], name=\"$matches[2]\"\n";
     }
     else {
@@ -185,7 +216,7 @@ abstract class MultiPart extends Body {
 // Typiquement un texte de message avec des fichiers attachés
 class Mixed extends MultiPart {
   function asHtml(): string {
-    $html = "Mixed::asHtml()<br>\n";
+    $html = Body::$debug ? "Mixed::asHtml()<br>\n" : '';
     $html .= "<table border=1>\n";
     foreach ($this->parts() as $part) {
       $html .= "<tr><td>".$part->asHtml()."</td></tr>\n";
@@ -198,7 +229,26 @@ class Mixed extends MultiPart {
 // Typiquement un texte de message en plain/text et en Html
 class Alternative extends MultiPart {
   function asHtml(): string {
-    $html = "Alternative::asHtml()<br>\n";
+    if (Body::$debug) {
+      $html = "Alternative::asHtml()<br>\n";
+      $html .= "<table border=1>\n";
+      foreach ($this->parts() as $part) {
+        $html .= "<tr><td>".$part->asHtml()."</td></tr>\n";
+      }
+      $html .= "</table>\n";
+      return $html;
+    }
+    else {
+      $parts = $this->parts();
+      return $parts[count($parts)-1]->asHtml();
+    }
+  }
+};
+
+// Typiquement un texte Html avec des images associées en ligne
+class Related extends MultiPart {
+  function asHtml(): string {
+    $html = Body::$debug ? 'Related::asHtml()' : '';
     $html .= "<table border=1>\n";
     foreach ($this->parts() as $part) {
       $html .= "<tr><td>".$part->asHtml()."</td></tr>\n";
@@ -206,11 +256,6 @@ class Alternative extends MultiPart {
     $html .= "</table>\n";
     return $html;
   }
-};
-
-// Typiquement un texte Html avec des images associées en ligne
-class Related extends MultiPart {
-  function asHtml(): string { return 'Related::asHtml()'; }
 };
 
 

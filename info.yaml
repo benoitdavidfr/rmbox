@@ -52,7 +52,7 @@ multipart:
     doc: TEXT and attachments.
   related:
     doc: |
-      semble signifier que les parties sont reliées
+      signifie que les parties sont reliées
       par exemple un texte HTML peut contenir des images
       La référence à l'image prend la forme:
         <img style="width: 650px; height: 177px;" alt="" src="cid:part1.F824B868.67530DC1@developpement-durable.gouv.fr">
