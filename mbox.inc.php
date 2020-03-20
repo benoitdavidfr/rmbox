@@ -162,7 +162,8 @@ class MonoPart extends Body {
       }
     }
     elseif (preg_match('!^(application/(pdf|msword)); name="([^"]+)"$!', $this->type, $matches)) {
-      return "Attachment type $matches[1], name=\"$matches[2]\"\n";
+      return "<a href='?action=dlAttached&amp;offset=$_GET[offset]&amp;name=".urlencode($matches[3])."'>"
+        ."Attachment type $matches[1], name=\"$matches[3]\"</a>\n";
     }
     else {
       return "<b>Unknown Content-Type '$this->type'</b>"
@@ -215,6 +216,7 @@ abstract class MultiPart extends Body {
 
 // Typiquement un texte de message avec des fichiers attachés
 class Mixed extends MultiPart {
+  // retourne le code Html d'affichage de l'objet
   function asHtml(): string {
     $html = Body::$debug ? "Mixed::asHtml()<br>\n" : '';
     $html .= "<table border=1>\n";
@@ -223,6 +225,10 @@ class Mixed extends MultiPart {
     }
     $html .= "</table>\n";
     return $html;
+  }
+  
+  function dlAttached(string $name) {
+    echo "Mixed::dlAttached($name)<br>\n";
   }
 };
 
@@ -457,4 +463,7 @@ class Message {
     }
     return true;
   }
+  
+  // télécharge une pièce jointe
+  function dlAttached(string $name) { $this->body()->dlAttached($name); }
 }
