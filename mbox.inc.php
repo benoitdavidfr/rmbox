@@ -17,6 +17,14 @@ doc: |
   related  ::= text/html + inlineimage+
   inlineimage ::= content-type + Content-ID + contents
 journal: |
+  20/3/2020:
+    - ajout correction headers erronés
+    - détection erreur sur http://localhost/rmbox/?action=get&mbox=Sent&offset=2002264646
+      - les messages ajoutés par le calendrier ne sont pas terminées par une ligne vide
+      - lors de la lecture le message est agrégé avec le suivant
+    - -> mise en place d'un contournement utilisant la méthode Message::isStartOfMessage()
+    - ajout d'un parse avec decalage par offset et non par numéro de message
+    - ajout gestion format text/calendar et application/ics
   19/3/2020:
     - refonte de la gestion des messages multi-parties avec la hiérarchie de classe Body
     - fonctionne sur http://localhost/rmbox/?action=get&offset=1475300
@@ -31,7 +39,7 @@ classes:
 abstract class Body {
   static $debug = false;
   protected $type; // le type de contenu = type MIME - string
-  protected $headers=[]; // [ string ] - les autres en-têtes
+  protected $headers=[]; // [ key -> string ] - les autres en-têtes
   protected $contents; // le contenu comme chaine d'octets évent. décodé en fonction de Content-Transfer-Encoding - string
   
   // crée un nouveau Body en fonction du type, les headers complémentaires sont utilisés pour les parties de multi-parties
@@ -64,6 +72,12 @@ abstract class Body {
       }
       //echo "line=$line\n"; print_r($this);
     }
+    // Correction des headers erronés Content-type -> Content-Type
+    if (isset($headers['Content-type'])) {
+      $headers['Content-Type'] = $headers['Content-type'];
+      unset($headers['Content-type']);
+    }
+    // Fin correction
     return $headers;
   }
   
@@ -101,6 +115,19 @@ abstract class Body {
 
 // Corps en une seule partie
 class MonoPart extends Body {
+  // renvoie le contenu décodé en fonction du header Content-Transfer-Encoding
+  function decodedContents(): string {
+    $ctEncoding = $this->headers['Content-Transfer-Encoding'] ?? null;
+    if (!$ctEncoding || ($ctEncoding == '8bit') || ($ctEncoding == '7bit'))
+      return $this->contents;
+    elseif ($ctEncoding == 'base64')
+      return base64_decode($this->contents);
+    elseif ($ctEncoding == 'quoted-printable')
+      return quoted_printable_decode($this->contents);
+    else
+      throw new Exception("Content-Transfer-Encoding == '$ctEncoding' inconnu");
+  }
+  
   // retourne le code Html d'affichage de l'objet
   function asHtml(): string {
     if (($this->type == '') && ($this->contents == ''))
@@ -115,24 +142,21 @@ class MonoPart extends Body {
         foreach ($this->headers as $key => $value)
           $html .= "<tr><td>$key</td><td>$value</td></tr>\n";
       }
-      $ctEncoding = $this->headers['Content-Transfer-Encoding'] ?? null;
-      if (!$ctEncoding || ($ctEncoding == '8bit') || ($ctEncoding == '7bit'))
-        $contents = $this->contents;
-      elseif ($ctEncoding == 'base64')
-        $contents = base64_decode($this->contents);
-      elseif ($ctEncoding == 'quoted-printable')
-        $contents = quoted_printable_decode($this->contents);
-      else {
+      
+      try {
+        $contents = $this->decodedContents();
+      } catch (Exception $e) {
         if (!Body::$debug) {
+          Body::$debug = true;
           $html .= "<table border=1>\n";
           $html .= '<tr><td>Content-Type</td><td>'.$this->type."</td></tr>\n";
           foreach ($this->headers as $key => $value)
             $html .= "<tr><td>$key</td><td>$value</td></tr>\n";
-          Body::$debug = true;
         }
-        $html .= "<tr><td colspan=2>Warning: dans Message::body() Content-Transfer-Encoding == '$ctEncoding' inconnu</td></tr>\n";
+        $html .= "<tr><td colspan=2>Warning: dans MonoPart::asHtml() ".$e->getMessage()."</td></tr>\n";
         $contents = $this->contents;
       }
+      
       if (!in_array($charset, ['utf-8','UTF-8']))
         $contents = mb_convert_encoding($contents, 'utf-8', $charset);
       if ($format=='plain') {
@@ -158,12 +182,18 @@ class MonoPart extends Body {
         return "<img src=\"data:$type;base64,".$this->contents."\">";
       }
       else {
-        return "Warning: dans Message::body() Content-Transfer-Encoding == '$ctEncoding' inconnu\n";
+        return "Warning: dans MonoPart::asHtml() Content-Transfer-Encoding == '$ctEncoding' inconnu\n";
       }
     }
     elseif (preg_match('!^(application/(pdf|msword)); name="([^"]+)"$!', $this->type, $matches)) {
       return "<a href='?action=dlAttached&amp;offset=$_GET[offset]&amp;name=".urlencode($matches[3])."'>"
         ."Attachment type $matches[1], name=\"$matches[3]\"</a>\n";
+    }
+    elseif (preg_match('!^text/calendar!', $this->type)) {
+      return '<pre><i>Content-Type: '.$this->type."</i>\n".htmlentities($this->contents).'</pre>';
+    }
+    elseif (preg_match('!^application/ics!', $this->type)) {
+      return '<pre><i>Content-Type: '.$this->type."</i>\n".htmlentities($this->contents).'</pre>';
     }
     else {
       return "<b>Unknown Content-Type '$this->type'</b>"
@@ -280,12 +310,20 @@ class Message {
   protected $body; // texte correspondant au corps du message avec séparateur \n entre lignes
   protected $offset; // offset du message dans le fichier mbox
   
+  // detection du début d'un nouveau message avec $line
+  // Gestion d'un bug dans le fichier des messages:
+  // Lorsque le calendrier insère un message, celui-ci ne se termine pas par une ligne vide mais par une ligne boundary
+  static function isStartOfMessage(string $precLine, string $line): bool {
+    return (strncmp($line, 'From', 4)==0)
+      && (($precLine == '') || (strncmp($precLine, '--Boundary', 10)==0));
+  }
+  
   /*PhpDoc: methods
   name: parse
   title: "static function parse(string $path, int &$start=0, int $maxNbre=10, array $criteria=[]): \\Generator - analyse un fichier mbox et retourne des messages respectant les critères"
   doc: |
     Le paramètre $start est retourné avec la valeur à utiliser dans l'appel suivant ou -1 si le fichier a été entièrement parcouru
-    Il serait plus efficace d'utiliser un offset plutôt qu'un nbre de messages.
+    Pour utiliser l'offset à la place de start utiliser la méthode parseUsingOffset()
   */
   static function parse(string $path, int &$start=0, int $maxNbre=10, array $criteria=[]): \Generator {
     if (!($mbox = @fopen($path, 'r')))
@@ -296,7 +334,7 @@ class Message {
     $offset = 0; // offset de l'entegistrement courant
     while ($iline = fgets($mbox)) {
       $line = rtrim ($iline, "\r\n");
-      if (($precLine == '') && (substr($line, 0, 4) == 'From')) { // detection d'un nouveau message
+      if (self::isStartOfMessage($precLine, $line)) { // detection d'un nouveau message
         if ($no++ >= $start) {
           $msg = new Message($msgTxt, $offset);
           if ($msg->match($criteria)) {
@@ -319,6 +357,38 @@ class Message {
   }
   
   /*PhpDoc: methods
+  name: parseUsingOffset
+  title: "static function parseUsingOffset(string $path, int &$offset, int $maxNbre=10, array $criteria=[]): \\Generator - analyse un fichier mbox à partir d'un offset et retourne des messages respectant les critères"
+  doc: |
+    Le paramètre $offset est retourné avec la valeur à utiliser dans l'appel suivant ou -1 si le fichier a été entièrement parcouru
+  */
+  static function parseUsingOffset(string $path, int &$offset, int $maxNbre=10, array $criteria=[]): \Generator {
+    if (!($mbox = @fopen($path, 'r')))
+      die("Erreur d'ouverture de mbox $path");
+    fseek($mbox, $offset);
+    $precLine = "initialisée <> '' pour éviter une détection sur la première ligne"; // la ligne précédente
+    $msgTxt = []; // le message sous la forme d'une liste de lignes rtrimmed
+    while ($iline = fgets($mbox)) {
+      $line = rtrim ($iline, "\r\n");
+      if (self::isStartOfMessage($precLine, $line)) { // detection d'un nouveau message
+        $msg = new Message($msgTxt, $offset);
+        $offset = ftell($mbox) - strlen($iline); // l'offset du message suivant
+        if ($msg->match($criteria)) {
+          yield $msg;
+          if (--$maxNbre <= 0) {
+            return;
+          }
+        }
+        $msgTxt = [];
+      }
+      $msgTxt[] = $line; 
+      $precLine = $line;
+    }
+    $offset = -1;
+    return;
+  }
+  
+  /*PhpDoc: methods
   name: parse
   title: "static function get(string $path, int $offset): self  - retourne le message commencant à l'offset défini en paramètre"
   doc: |
@@ -331,9 +401,8 @@ class Message {
     $msgTxt = []; // le message sous la forme d'une liste de lignes rtrimmed
     while ($line = fgets($mbox)) {
       $line = rtrim ($line, "\r\n");
-      if (($precLine == '') && (substr($line, 0, 4) == 'From')) { // detection d'un nouveau message
+      if (self::isStartOfMessage($precLine, $line)) // detection d'un nouveau message
         break;
-      }
       $msgTxt[] = $line; 
       $precLine = $line;
     }
@@ -357,7 +426,7 @@ class Message {
       echo "Warning: dans Message::body() Content-Transfer-Encoding == '$ctEncoding' inconnu<br>\n";
       $contents = $this->body;
     }
-    return Body::create($this->header['Content-Type'][0], $contents);
+    return Body::create($this->header['Content-Type'][0] ?? '', $contents);
   }
   
   /*PhpDoc: methods
@@ -399,6 +468,12 @@ class Message {
         $this->header[$key][$i] = @iconv_mime_decode($atom);
       }
     }
+    // Correction des headers erronés Content-type -> Content-Type
+    if (isset($this->header['Content-type'])) {
+      $this->header['Content-Type'] = $this->header['Content-type'];
+      unset($this->header['Content-type']);
+    }
+    // Fin correction
     $this->body = implode("\n", $txt);
   }
   

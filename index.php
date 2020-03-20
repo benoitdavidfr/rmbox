@@ -41,7 +41,7 @@ if (!isset($_GET['action'])) { // par défaut liste les messages
   echo "<td><input type='submit'></td>\n";
   echo "</tr></table></form>\n";
 
-  echo "<table border=1><th>G</th><th>From</th><th>To</th><th>Date</th><th>Subject</th>\n";
+  echo "<table border=1><th>M</th><th>From</th><th>To</th><th>Date</th><th>Subject</th>\n";
   $criteria = [];
   foreach (['From','To','Subject'] as $key)
     if (isset($_GET[$key]))
@@ -49,7 +49,7 @@ if (!isset($_GET['action'])) { // par défaut liste les messages
   foreach (Message::parse($mbox, $start, $max, $criteria) as $msg) {
     $header = $msg->short_header();
     echo "<tr>";
-    echo "<td><a href='?action=get&amp;mbox=$mbox&amp;offset=",$msg->offset(),"'>G</a></td>";
+    echo "<td><a href='?action=get&amp;mbox=$mbox&amp;offset=",$msg->offset(),"'>M</a></td>";
     echo "<td>",htmlentities(mb_substr($header['From'], 0, 40)),"</td>";
     echo "<td>",htmlentities(mb_substr($header['To'], 0, 40)),"</td>";
     echo "<td>",htmlentities($header['Date']),"</td>";
@@ -85,7 +85,7 @@ if ($_GET['action'] == 'get') { // affiche un message donné défini par son off
     echo "<tr><td>Content-Transfer-Encoding</td><td>",htmlentities($header['Content-Transfer-Encoding']),"</td></tr>\n";
   echo "<tr><td>Body</td><td>",$msg->body()->asHtml(),"</td></tr>\n";
   echo "</table>\n";
-  echo "<a href='?action=dump&amp;offset=$_GET[offset]'>dump</a><br>\n";
+  echo "<a href='?action=dump&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]'>dump</a><br>\n";
   die();
 }
 

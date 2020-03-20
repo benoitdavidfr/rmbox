@@ -6,6 +6,8 @@ doc: |
   Affichage de la liste des messages correspondant à certains critères.
   Affichage d'un  message particulier et notamment accès aux pièces jointes.
 journal: |
+  20/3/2020:
+    - gestion d'un bug dans less fichiers Mbox
   19/3/2020:
     - refonte gestion des multiparts, en cours
   18/3/2020:

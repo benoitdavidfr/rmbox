@@ -4,56 +4,27 @@ name: read.php
 title: index.php - lecture d'un fichier Mbox (https://fr.wikipedia.org/wiki/Mbox)
 doc: |
 journal: |
+  20/3/2020:
+    - ajout des commandes listOffset, getOffset, offset et testDebordement
   18/3/2020:
     initialisation
 */
 
-$path = '0entrant';
+//$path = '0entrant';
+$path = 'Sent';
 
 require_once __DIR__.'/mbox.inc.php';
 
-if (0) { // Affichage des premières lignes avec la version dump - la fin de ligne est \r\n
-  if (!($mbox = @fopen($path,'r')))
-    die("Erreur d'ouverture de mbox");
-
-  $line = "\r\n";
-  echo "<table border=1>\n";
-  for($i=0; $i< strlen($line); $i++) {
-    $c = substr($line, $i, 1);
-    printf("<td>%x</td>", ord($c));
-  }
-  echo "</tr>";
-  echo "</table>\n";
-
-  echo "<table border=1>\n";
-  $nol = 0;
-  while ($line = fgets($mbox)) {
-    $line = rtrim ($line, "\r\n");
-    echo "<tr><td>",str_replace([' ',"\t"], ['&nbsp;','\t'], htmlentities($line)),"</td><td><table border=1>";
-    echo "<tr>";
-    for($i=0; $i< strlen($line); $i++) {
-      $c = substr($line, $i, 1);
-      echo "<td>",htmlentities($c),"</td>";
-    }
-    echo "</tr>";
-    echo "<tr>";
-    for($i=0; $i< strlen($line); $i++) {
-      $c = substr($line, $i, 1);
-      printf("<td>%x</td>", ord($c));
-    }
-    echo "</tr>";
-    echo "</table></td></tr>\n";
-    if (++$nol >= 400)
-      break;
-  }
-}
-
 //echo "argc=$argc, argv="; print_r($argv);
-if ($argc == 1) {
+if ($argc == 1) { // menu
   echo "usage: php $argv[0] <cmde> [<params>]\n";
   echo "Les commandes:\n";
   echo "  - list [{start} [{max}]]: liste les en-tetes à partir de {start} (défaut 0) avec maximum max messages (défaut 10)\n";
+  echo "  - listOffset {offset} [{max}]: liste les en-tetes à partir de {offset} avec maximum max messages (défaut 10)\n";
   echo "  - get {Message-ID} : lit le message identifié par {Message-ID}\n";
+  echo "  - getOffset {offset} : lit le message commencant à l'offset {offset}\n";
+  echo "  - offset {offset} : lit le fichier commencant à l'offset {offset}\n";
+  //echo "  - testDebordement : test du débordement d'un entier\n";
   die();
 }
 
@@ -64,12 +35,53 @@ if ($argv[1] == 'list') {
   die();
 }
 
-if ($argv[1] == 'get') {
+if ($argv[1] == 'listOffset') {
   if ($argc < 3)
     die("Erreur paramètre obligatoire\n");
+  $offset = $argv[2];
+  foreach (Message::parseUsingOffset($path, $offset, $argv[3] ?? 10, []) as $msg) {
+    echo json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
+  }
+  echo "offset=$offset\n";
+  die();
+}
+  
+if ($argv[1] == 'get') {
+  if ($argc < 3)
+    die("Erreur paramètre Message-ID obligatoire\n");
   $msgs = Message::parse($path, 0, 1, ['Message-ID'=> "<$argv[2]>"]);
   echo json_encode(['header'=> $msgs[0]->short_header(), 'body'=> $msgs[0]->body()],
     JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
+  die();
+}
+
+if ($argv[1] == 'getOffset') {
+  if ($argc < 3)
+    die("Erreur paramètre offset obligatoire\n");
+  $msg = Message::get($path, $argv[2]);
+  echo json_encode(['header'=> $msg->short_header(), 'body'=> $msg->body()],
+    JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
+  die();
+}
+
+if ($argv[1] == 'offset') {
+  if ($argc < 3)
+    die("Erreur paramètre offset obligatoire\n");
+  if (!($mbox = @fopen($path, 'r')))
+    throw new Exception("Erreur d'ouverture de mbox $path");
+  fseek($mbox, $argv[2]);
+  while (FALSE !== ($line = fgets($mbox))) {
+    echo $line;
+  }
+  die();
+}
+
+if ($argv[1] == 'testDebordement') { // Test nombre entier maximum
+  $nbrEntier = 65536;
+  var_dump($nbrEntier);
+  $nbrEntier = $nbrEntier * $nbrEntier * 100;
+  var_dump($nbrEntier);
+  die();
 }
 
 die("Aucun traitement reconnu\n");
