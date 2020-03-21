@@ -1,11 +1,13 @@
-title: rmbox - lecture d'un fichier mbox
+title: rmbox - extraction et utilisation de messages à partir d'un fichier Mbox
 path: /rmbox
 doc: |
   Lecture d'un fichier Mbox (https://fr.wikipedia.org/wiki/Mbox) généré notamment par Thunderbird
   Décodage des messages présents dans le fichier.
   Affichage de la liste des messages correspondant à certains critères.
-  Affichage d'un  message particulier et notamment accès aux pièces jointes.
+  Affichage d'un message particulier et notamment extraction des pièces jointes.
 journal: |
+  21/3/2020:
+    - téléchargement d'une pièce jointe d'un message
   20/3/2020:
     - gestion d'un bug dans less fichiers Mbox
   19/3/2020:

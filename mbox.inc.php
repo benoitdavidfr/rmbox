@@ -1,8 +1,18 @@
 <?php
 /*PhpDoc:
 name: mbox.inc.php
-title: mbox.inc.php - définition de classes pour gérer les messages d'un fichier Mbox dont la classe Message
+title: mbox.inc.php - définition de classes pour gérer les messages d'un fichier Mbox
 doc: |
+  La classe Message gère un message ainsi que les fonctions d'extraction d'un message à partir d'un fichier Mbox.
+  Un message est composé d'en-têtes et d'un corps.
+  Ce corps est géré par la classe abstraite Body.
+  Ce corps du message peut être soit :
+    - composé d'une seule partie (classe MonoPart)
+    - composé de plusieurs parties (classe MultiPart) et peut alors être :
+      - une composition mixte, typiquement un texte de message avec des fichiers attachés (classe Mixed)
+      - une alternative entre plusieurs éléments, typiquement un texte de message en plain/text et en Html (classe Alternative)
+      - un ensemble d'éléments liés, typiquement un texte Html avec des images associées en ligne (classe Related)
+
   message ::= header+ + body
   header ::= content-type | Content-Transfer-Encoding | ...
   body ::= monoPart | multiPart
@@ -17,6 +27,8 @@ doc: |
   related  ::= text/html + inlineimage+
   inlineimage ::= content-type + Content-ID + contents
 journal: |
+  21/3/2020:
+    - téléchargement d'une pièce jointe d'un message
   20/3/2020:
     - ajout correction headers erronés
     - détection erreur sur http://localhost/rmbox/?action=get&mbox=Sent&offset=2002264646
@@ -35,9 +47,13 @@ classes:
 */
 
 
-// Corps d'un message ou partie
+/*PhpDoc: classes
+name: Body
+title: abstract class Body - Corps d'un message ou partie
+doc: |
+methods:
+*/
 abstract class Body {
-  static $debug = false;
   protected $type; // le type de contenu = type MIME - string
   protected $headers=[]; // [ key -> string ] - les autres en-têtes
   protected $contents; // le contenu comme chaine d'octets évent. décodé en fonction de Content-Transfer-Encoding - string
@@ -72,6 +88,8 @@ abstract class Body {
       }
       //echo "line=$line\n"; print_r($this);
     }
+    foreach ($headers as $key => $value)
+      $headers[$key] = @iconv_mime_decode($value);
     // Correction des headers erronés Content-type -> Content-Type
     if (isset($headers['Content-type'])) {
       $headers['Content-Type'] = $headers['Content-type'];
@@ -110,10 +128,19 @@ abstract class Body {
   }
 
   // chaque objet doit être capable de s'afficher sous la forme d'un texte HTML
-  abstract function asHtml(): string;
+  // Si et ssi $debug est vrai alors affichage d'infos détaillées de debug
+  abstract function asHtml(bool $debug): string;
+
+  // Pour un fichier attaché renvoie son nom sinon null
+  abstract function name(): ?string;
 };
 
-// Corps en une seule partie
+/*PhpDoc: classes
+name: MonoPart
+title: class MonoPart extends Body - Partie atomique
+doc: |
+methods:
+*/
 class MonoPart extends Body {
   // renvoie le contenu décodé en fonction du header Content-Transfer-Encoding
   function decodedContents(): string {
@@ -129,50 +156,35 @@ class MonoPart extends Body {
   }
   
   // retourne le code Html d'affichage de l'objet
-  function asHtml(): string {
+  function asHtml(bool $debug): string {
+    if ($debug) {
+      $html = "<table border=1>\n";
+      $html .= '<tr><td>Content-Type</td><td>'.$this->type."</td></tr>\n";
+      foreach ($this->headers as $key => $value)
+        $html .= "<tr><td>$key</td><td>".htmlentities($value)."</td></tr>\n";
+      $html .= "<tr><td>contents</td><td>".$this->asHtml(false)."</td></tr>\n";
+      $html .= "</table>\n";
+      return $html;
+    }
     if (($this->type == '') && ($this->contents == ''))
       return "Empty MonoPart\n";
     elseif (preg_match('!^text/(plain|html); charset="?([-a-zA-Z0-9]*)!', $this->type, $matches)) {
       $format = $matches[1];
       $charset = $matches[2];
       $html = '';
-      if (Body::$debug) {
-        $html .= "<table border=1>\n";
-        $html .= '<tr><td>Content-Type</td><td>'.$this->type."</td></tr>\n";
-        foreach ($this->headers as $key => $value)
-          $html .= "<tr><td>$key</td><td>$value</td></tr>\n";
-      }
-      
       try {
         $contents = $this->decodedContents();
       } catch (Exception $e) {
-        if (!Body::$debug) {
-          Body::$debug = true;
-          $html .= "<table border=1>\n";
-          $html .= '<tr><td>Content-Type</td><td>'.$this->type."</td></tr>\n";
-          foreach ($this->headers as $key => $value)
-            $html .= "<tr><td>$key</td><td>$value</td></tr>\n";
-        }
-        $html .= "<tr><td colspan=2>Warning: dans MonoPart::asHtml() ".$e->getMessage()."</td></tr>\n";
+        $html .= "<b>Warning: dans MonoPart::asHtml() ".$e->getMessage()."</b>\n";
         $contents = $this->contents;
       }
       
       if (!in_array($charset, ['utf-8','UTF-8']))
         $contents = mb_convert_encoding($contents, 'utf-8', $charset);
-      if ($format=='plain') {
-        if (Body::$debug)
-          $html .= '<tr><td>contents</td><td><pre>'.htmlentities($contents).'</pre></td></tr>';
-        else
-          $html .= '<pre>'.htmlentities($contents).'</pre>';
-      }
-      else { // if ($format=='html')
-        if (Body::$debug)
-          $html .= "<tr><td>contents</td><td>$contents</td></tr>\n";
-        else
-          $html .= $contents;
-      }
-      if (Body::$debug)
-        $html .= "</table>\n";
+      if ($format == 'plain')
+        $html .= '<pre>'.htmlentities($contents).'</pre>';
+      else // if ($format=='html')
+        $html .= $contents;
       return $html;
     }
     elseif (preg_match('!^(image/(png|jpeg|gif))!', $this->type, $matches)) {
@@ -185,8 +197,10 @@ class MonoPart extends Body {
         return "Warning: dans MonoPart::asHtml() Content-Transfer-Encoding == '$ctEncoding' inconnu\n";
       }
     }
-    elseif (preg_match('!^(application/(pdf|msword)); name="([^"]+)"$!', $this->type, $matches)) {
-      return "<a href='?action=dlAttached&amp;offset=$_GET[offset]&amp;name=".urlencode($matches[3])."'>"
+    elseif (preg_match('!^(application/(pdf|msword|vnd\.oasis\.opendocument\.text)); name="([^"]+)"$!', $this->type, $matches)) {
+      return "<a href='?action=dlAttached&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]"
+        .(isset($_GET['debug']) ? "&amp;debug=true" : '')
+        ."&amp;name=".urlencode($matches[3])."'>"
         ."Attachment type $matches[1], name=\"$matches[3]\"</a>\n";
     }
     elseif (preg_match('!^text/calendar!', $this->type)) {
@@ -196,13 +210,39 @@ class MonoPart extends Body {
       return '<pre><i>Content-Type: '.$this->type."</i>\n".htmlentities($this->contents).'</pre>';
     }
     else {
-      return "<b>Unknown Content-Type '$this->type'</b>"
+      return "<b>Warning: dans MonoPart::asHtml() Unknown Content-Type '$this->type'</b>"
         .'<pre>'.htmlentities($this->contents).'</pre>';
     }
   }
+  
+  // Pour un fichier attaché renvoie son nom sinon null
+  function name(): ?string {
+    if (!preg_match('!^(application/(pdf|msword|vnd\.oasis\.opendocument\.text)); name="([^"]+)"$!', $this->type, $matches))
+      return null;
+    return $matches[3];
+  }
+
+  // génère le téléchargement d'un fichier attaché
+  function download(bool $debug) {
+    if ($debug) {
+      echo "<pre>"; print_r($this); echo "</pre>\n"; die();
+    }
+    $contents = $this->decodedContents();
+    header('Content-type: '.$this->type);
+    header('Content-length: '. strlen($contents));
+    if (isset($this->headers['Content-Disposition']))
+      header('Content-Disposition: '.$this->headers['Content-Disposition']);
+    echo $contents;
+    die();
+  }
 };
 
-// Corps composé de plusieurs parties, chacune étant un corps
+/*PhpDoc: classes
+name: MultiPart
+title: abstract class MultiPart - Partie composée de plusieurs parties
+doc: |
+methods:
+*/
 abstract class MultiPart extends Body {
   // renvoie la boundary déduite du Content_Type
   function boundary(): string {
@@ -242,52 +282,74 @@ abstract class MultiPart extends Body {
     $html .= "</table>\n";
     return $html;
   }*/
+  
+  // Pour un fichier attaché renvoie son nom sinon null
+  function name(): ?string { return null; }
 };
 
-// Typiquement un texte de message avec des fichiers attachés
+/*PhpDoc: classes
+name: Mixed
+title: class Mixed extends MultiPart - Composition mixte, typiquement un texte de message avec des fichiers attachés
+doc: |
+methods:
+*/
 class Mixed extends MultiPart {
   // retourne le code Html d'affichage de l'objet
-  function asHtml(): string {
-    $html = Body::$debug ? "Mixed::asHtml()<br>\n" : '';
+  function asHtml(bool $debug): string {
+    $html = $debug ? "Mixed::asHtml()<br>\n" : '';
     $html .= "<table border=1>\n";
     foreach ($this->parts() as $part) {
-      $html .= "<tr><td>".$part->asHtml()."</td></tr>\n";
+      $html .= "<tr><td>".$part->asHtml($debug)."</td></tr>\n";
     }
     $html .= "</table>\n";
     return $html;
   }
   
-  function dlAttached(string $name) {
-    echo "Mixed::dlAttached($name)<br>\n";
+  function dlAttached(string $name, bool $debug) {
+    //echo "Mixed::dlAttached($name)<br>\n";
+    foreach ($this->parts() as $part) {
+      if ($part->name() == $name)
+        $part->download($debug);
+    }
   }
 };
 
-// Typiquement un texte de message en plain/text et en Html
+/*PhpDoc: classes
+name: Alternative
+title: class Alternative extends MultiPart - Alternative entre plusieurs éléments, typiquement un texte de message en texte brut et en Html
+doc: |
+methods:
+*/
 class Alternative extends MultiPart {
-  function asHtml(): string {
-    if (Body::$debug) {
+  function asHtml(bool $debug): string {
+    if ($debug) {
       $html = "Alternative::asHtml()<br>\n";
       $html .= "<table border=1>\n";
       foreach ($this->parts() as $part) {
-        $html .= "<tr><td>".$part->asHtml()."</td></tr>\n";
+        $html .= "<tr><td>".$part->asHtml($debug)."</td></tr>\n";
       }
       $html .= "</table>\n";
       return $html;
     }
     else {
       $parts = $this->parts();
-      return $parts[count($parts)-1]->asHtml();
+      return $parts[count($parts)-1]->asHtml($debug);
     }
   }
 };
 
-// Typiquement un texte Html avec des images associées en ligne
+/*PhpDoc: classes
+name: Related
+title: class Related extends MultiPart - Ensemble d'éléments liés, typiquement un texte Html avec des images associées en ligne
+doc: |
+methods:
+*/
 class Related extends MultiPart {
-  function asHtml(): string {
-    $html = Body::$debug ? 'Related::asHtml()' : '';
+  function asHtml(bool $debug): string {
+    $html = $debug ? 'Related::asHtml()' : '';
     $html .= "<table border=1>\n";
     foreach ($this->parts() as $part) {
-      $html .= "<tr><td>".$part->asHtml()."</td></tr>\n";
+      $html .= "<tr><td>".$part->asHtml($debug)."</td></tr>\n";
     }
     $html .= "</table>\n";
     return $html;
@@ -297,8 +359,11 @@ class Related extends MultiPart {
 
 /*PhpDoc: classes
 name: Message
-title: classe Message - gestion des messages d'un fichier Mbox
+title: classe Message - gestion d'un message ainsi que son extraction à partir d'un fichier Mbox
 doc: |
+  Un message est composé d'en-têtes (header) et d'un corps (body) géré par la classe Body.
+  Il est contenu dans un fichier Mbox à un certain décalage par rapport au début du fichier.
+
   class Message {
     protected $header=[]; // dictionnaire des en-têtes, key -> liste(string)
     protected $body; // texte correspondant au corps du message avec séparateur \n entre lignes
@@ -314,8 +379,12 @@ class Message {
   // Gestion d'un bug dans le fichier des messages:
   // Lorsque le calendrier insère un message, celui-ci ne se termine pas par une ligne vide mais par une ligne boundary
   static function isStartOfMessage(string $precLine, string $line): bool {
-    return (strncmp($line, 'From', 4)==0)
-      && (($precLine == '') || (strncmp($precLine, '--Boundary', 10)==0));
+    return (strncmp($line, 'From - ', 7)==0)
+      && preg_match('!^From - [a-zA-Z]{3} [a-zA-Z]{3} \d\d \d\d:\d\d:\d\d \d\d\d\d$!', $line);
+  }
+  static function isStartOfMessage2(string $precLine, string $line): bool {
+    return (strncmp($line, 'From ', 5)==0)
+      && (($precLine == '') || (strncmp($precLine, '--Boundary', 10)==0) || (strncmp($precLine, '--------------', 14)==0));
   }
   
   /*PhpDoc: methods
@@ -328,14 +397,14 @@ class Message {
   static function parse(string $path, int &$start=0, int $maxNbre=10, array $criteria=[]): \Generator {
     if (!($mbox = @fopen($path, 'r')))
       die("Erreur d'ouverture de mbox $path");
-    $precLine = "initialisée <> '' pour éviter une détection sur la première ligne"; // la ligne précédente
+    $precLine = false; // la ligne précédente
     $msgTxt = []; // le message sous la forme d'une liste de lignes rtrimmed
     $no = 0; // le no courant de message
     $offset = 0; // offset de l'entegistrement courant
     while ($iline = fgets($mbox)) {
       $line = rtrim ($iline, "\r\n");
       if (self::isStartOfMessage($precLine, $line)) { // detection d'un nouveau message
-        if ($no++ >= $start) {
+        if (($precLine !== false) && $no++ >= $start) {
           $msg = new Message($msgTxt, $offset);
           if ($msg->match($criteria)) {
             yield $msg;
@@ -366,11 +435,11 @@ class Message {
     if (!($mbox = @fopen($path, 'r')))
       die("Erreur d'ouverture de mbox $path");
     fseek($mbox, $offset);
-    $precLine = "initialisée <> '' pour éviter une détection sur la première ligne"; // la ligne précédente
+    $precLine = false; // la ligne précédente
     $msgTxt = []; // le message sous la forme d'une liste de lignes rtrimmed
     while ($iline = fgets($mbox)) {
       $line = rtrim ($iline, "\r\n");
-      if (self::isStartOfMessage($precLine, $line)) { // detection d'un nouveau message
+      if (($precLine !== false) && self::isStartOfMessage($precLine, $line)) { // detection d'un nouveau message
         $msg = new Message($msgTxt, $offset);
         $offset = ftell($mbox) - strlen($iline); // l'offset du message suivant
         if ($msg->match($criteria)) {
@@ -389,19 +458,19 @@ class Message {
   }
   
   /*PhpDoc: methods
-  name: parse
+  name: get
   title: "static function get(string $path, int $offset): self  - retourne le message commencant à l'offset défini en paramètre"
   doc: |
   */
   static function get(string $path, int $offset): self {
     if (!($mbox = @fopen($path, 'r')))
-      throw new Exception("Erreur d'ouverture de mbox $path");
+      throw new Exception("Erreur d'ouverture du fichier mbox $path");
     fseek($mbox, $offset);
-    $precLine = "initialisée <> '' pour éviter une détection sur la première ligne"; // la ligne précédente
+    $precLine = false; // la ligne précédente
     $msgTxt = []; // le message sous la forme d'une liste de lignes rtrimmed
     while ($line = fgets($mbox)) {
       $line = rtrim ($line, "\r\n");
-      if (self::isStartOfMessage($precLine, $line)) // detection d'un nouveau message
+      if (($precLine !== false) && self::isStartOfMessage($precLine, $line)) // détection d'un nouveau message
         break;
       $msgTxt[] = $line; 
       $precLine = $line;
@@ -411,12 +480,12 @@ class Message {
   
   /*PhpDoc: methods
   name: body
-  title: "function body(): Body - retourne le corps du message
+  title: "function body(): Body - retourne le corps du message comme Body"
   doc: |
   */
   function body(): Body {
     $ctEncoding = $this->header['Content-Transfer-Encoding'][0] ?? null;
-    if (!$ctEncoding || ($ctEncoding == '8bit') || ($ctEncoding == '7bit'))
+    if (!$ctEncoding || ($ctEncoding == '8bit') || ($ctEncoding == '7bit') || ($ctEncoding == '7BIT'))
       $contents = $this->body;
     elseif ($ctEncoding == 'base64')
       $contents = base64_decode($this->body);
@@ -488,9 +557,10 @@ class Message {
         'Message-ID',
         'Return-Path',
         'Subject',
-        'To',
         'From',
         'Organization',
+        'To',
+        'Cc',
         'Date',
         'Content-Type',
         'Content-Transfer-Encoding'
@@ -540,5 +610,5 @@ class Message {
   }
   
   // télécharge une pièce jointe
-  function dlAttached(string $name) { $this->body()->dlAttached($name); }
+  function dlAttached(string $name, bool $debug) { $this->body()->dlAttached($name, $debug); }
 }

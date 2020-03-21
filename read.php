@@ -1,17 +1,18 @@
 <?php
 /*PhpDoc:
 name: read.php
-title: index.php - lecture d'un fichier Mbox (https://fr.wikipedia.org/wiki/Mbox)
+title: read.php - exploitation d'un fichier Mbox en mode ligne de commande
 doc: |
 journal: |
   20/3/2020:
     - ajout des commandes listOffset, getOffset, offset et testDebordement
   18/3/2020:
     initialisation
+functions:
 */
 
-//$path = '0entrant';
-$path = 'Sent';
+//$path = __DIR__.'/mboxes/0entrant';
+$path = __DIR__.'/mboxes/Sent';
 
 require_once __DIR__.'/mbox.inc.php';
 
@@ -25,6 +26,8 @@ if ($argc == 1) { // menu
   echo "  - getOffset {offset} : lit le message commencant à l'offset {offset}\n";
   echo "  - offset {offset} : lit le fichier commencant à l'offset {offset}\n";
   //echo "  - testDebordement : test du débordement d'un entier\n";
+  echo "  - testSom : recherche des débuts de messages incorrects\n";
+  echo "  - mboxes : liste des boites aux lettres\n";
   die();
 }
 
@@ -81,6 +84,65 @@ if ($argv[1] == 'testDebordement') { // Test nombre entier maximum
   var_dump($nbrEntier);
   $nbrEntier = $nbrEntier * $nbrEntier * 100;
   var_dump($nbrEntier);
+  die();
+}
+
+// From - Mon Jul 04 08:26:16 2016
+function isStartOfMessage(string $precLine, string $line): bool {
+  return (strncmp($line, 'From - ', 7)==0)
+    && preg_match('!^From - [a-zA-Z]{3} [a-zA-Z]{3} \d\d \d\d:\d\d:\d\d \d\d\d\d$!', $line);
+}
+
+if ($argv[1] == 'testSom') { // recherche des débuts de messages incorrects
+  if (!($mbox = @fopen($path, 'r')))
+    die("Erreur d'ouverture de mbox $path");
+  $precLine = "initialisée <> '' pour éviter une détection sur la première ligne"; // la ligne précédente
+  while ($iline = fgets($mbox)) {
+    $line = rtrim ($iline, "\r\n");
+    if ((strncmp($line, 'From ', 5)==0) xor isStartOfMessage($precLine, $line)) {
+      echo "$precLine\n$line\n--\n";
+    }
+    $precLine = $line;
+  }
+  die();
+}
+
+/*PhpDoc: functions
+name: readfiles
+title: "function readfiles(string $dir, bool $recursive=false): array - Lecture des fichiers locaux du répertoire $dir"
+doc: |
+  Le système d'exploitation utilise ISO 8859-1, toutes les données sont gérées en UTF-8
+  Si recursive est true alors renvoie l'arbre
+*/
+function readfiles(string $dir, bool $recursive=false): array { // lecture des nom, type et date de modif des fichiers d'un rép.
+  $dirIso = utf8_decode($dir);
+  if (!$dh = opendir($dirIso))
+    die("Ouverture de $dir impossible");
+  $files = [];
+  while (($filename = readdir($dh)) !== false) {
+    if (in_array($filename, ['.','..']))
+      continue;
+    $file = [
+      'name'=> utf8_encode($filename),
+      'type'=> filetype("$dirIso/$filename"), 
+      'mdate'=>date ("Y-m-d H:i:s", filemtime("$dirIso/$filename")),
+    ];
+    if (($file['type'] == 'dir') && $recursive)
+      $file['content'] = readfiles($dir.'/'.utf8_encode($filename), $recursive);
+    $files[$file['name']] = $file;
+  }
+  closedir($dh);
+  return $files;
+}
+
+if ($argv[1] == 'mboxes') { // liste des Bal
+  $files = readfiles('mboxes');
+  ksort($files);
+  foreach (array_keys($files) as $filename) {
+    if (preg_match('!\.(msf)$!', $filename))
+      continue;
+    echo "$filename\n";
+  }
   die();
 }
 

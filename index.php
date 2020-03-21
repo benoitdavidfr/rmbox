@@ -1,14 +1,17 @@
 <?php
 /*PhpDoc:
 name: index.php
-title: index.php - navigation dans un fichier Mbox (https://fr.wikipedia.org/wiki/Mbox)
+title: index.php - navigation dans des fichiers Mbox en mode Web
 doc: |
   - liste des messages respectant certains critères
   - affichage d'un message particulier avec notamment accès aux pièces-jointes
   - affichage de la liste des Content-Type et des messages correspondants à chacun
 journal: |
+  21/3/2020:
+    - téléchargement d'une pièce jointe d'un message
   20/3/2020:
     - gestion de différents fichiers Mbox
+    - déplacement de ttes les boites aux lettres dans le répertoire mboxes
   19/3/2020:
     - refonte de la gestion des multiparts transférée dans mbox.inc.php
   18/3/2020:
@@ -16,7 +19,11 @@ journal: |
     - code testé pour les différents formats présents en dehors des multipart
 */
 ini_set('max_execution_time', 600);
-$mboxes = ['0entrant', 'Sent']; // liste des mbox possibles
+$mboxes = [  // liste des mbox possibles
+  '0entrant', // messages entrants courants
+  'Sent',     // messages sortants courants
+  //'Sympa',  // copie des messages provenant de Sympa
+];
 
 require_once __DIR__.'/mbox.inc.php';
 
@@ -46,7 +53,7 @@ if (!isset($_GET['action'])) { // par défaut liste les messages
   foreach (['From','To','Subject'] as $key)
     if (isset($_GET[$key]))
       $criteria[$key] = $_GET[$key];
-  foreach (Message::parse($mbox, $start, $max, $criteria) as $msg) {
+  foreach (Message::parse(__DIR__.'/mboxes/'.$mbox, $start, $max, $criteria) as $msg) {
     $header = $msg->short_header();
     echo "<tr>";
     echo "<td><a href='?action=get&amp;mbox=$mbox&amp;offset=",$msg->offset(),"'>M</a></td>";
@@ -73,30 +80,32 @@ if (!isset($_GET['action'])) { // par défaut liste les messages
 }
 
 if ($_GET['action'] == 'get') { // affiche un message donné défini par son offset 
-  $msg = Message::get($_GET['mbox'], $_GET['offset']);
+  $msg = Message::get(__DIR__.'/mboxes/'.$_GET['mbox'], $_GET['offset']);
   echo "<table border=1>\n";
   $header = $msg->short_header();
   echo "<tr><td>Date</td><td>",htmlentities($header['Date']),"</td></tr>\n";
   echo "<tr><td>From</td><td>",htmlentities($header['From']),"</td></tr>\n";
   echo "<tr><td>To</td><td>",htmlentities($header['To']),"</td></tr>\n";
+  if (isset($header['Cc']))
+    echo "<tr><td>Cc</td><td>",htmlentities($header['Cc']),"</td></tr>\n";
   echo "<tr><td>Subject</td><td>",htmlentities($header['Subject']),"</td></tr>\n";
   echo "<tr><td>Content-Type</td><td>",htmlentities($header['Content-Type'] ?? 'Non défini'),"</td></tr>\n";
   if (isset($header['Content-Transfer-Encoding']) && ($header['Content-Transfer-Encoding'] <> '8bit'))
     echo "<tr><td>Content-Transfer-Encoding</td><td>",htmlentities($header['Content-Transfer-Encoding']),"</td></tr>\n";
-  echo "<tr><td>Body</td><td>",$msg->body()->asHtml(),"</td></tr>\n";
+  echo "<tr><td>Body</td><td>",$msg->body()->asHtml(isset($_GET['debug'])),"</td></tr>\n";
   echo "</table>\n";
   echo "<a href='?action=dump&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]'>dump</a><br>\n";
   die();
 }
 
-if ($_GET['action'] == 'dlAttached') {
-  $msg = Message::get($_GET['mbox'], $_GET['offset']);
-  $msg->dlAttached($_GET['name']);
+if ($_GET['action'] == 'dlAttached') { // téléchargement d'une pièce jointe à un message
+  $msg = Message::get(__DIR__.'/mboxes/'.$_GET['mbox'], $_GET['offset']);
+  $msg->dlAttached($_GET['name'], isset($_GET['debug']));
   die();
 }
 
 if ($_GET['action'] == 'dump') { // dump un message défini par son offset 
-  $msg = Message::get($_GET['mbox'], $_GET['offset']);
+  $msg = Message::get(__DIR__.'/mboxes/'.$_GET['mbox'], $_GET['offset']);
   echo "<pre>"; print_r($msg);
   die();
 }
@@ -108,7 +117,7 @@ if ($_GET['action'] == 'listContentType') { // liste les Content-Type contenu da
   $start = $_GET['start'] ?? 0;
   $max = $_GET['max'] ?? 10;
   $contentTypes = [];
-  foreach (Message::parse($mbox, $start, $max) as $msg) {
+  foreach (Message::parse(__DIR__.'/mboxes/'.$mbox, $start, $max) as $msg) {
     $contentType = $msg->short_header()['Content-Type'] ?? '';
     //echo "$contentType\n";
     if (preg_match('!^(.*boundary=")[^"]*(".*)$!', $contentType, $matches))
@@ -136,7 +145,7 @@ if ($_GET['action'] == 'searchByContentType') {
   $start = 0;
   echo "searchByContentType <b>$sContentType</b><br>\n";
   echo "<table border=1><th>G</th><th>From</th><th>Date</th><th>Subject</th>\n";
-  foreach (Message::parse($mbox, $start, $_GET['max'] ?? 10) as $msg) {
+  foreach (Message::parse(__DIR__.'/mboxes/'.$mbox, $start, $_GET['max'] ?? 10) as $msg) {
     $header = $msg->short_header();
     $contentType = $header['Content-Type'] ?? '';
     if (substr($sContentType, 0, 10) == 'multipart/') {
@@ -161,7 +170,7 @@ if ($_GET['action'] == 'searchByContentType') {
 if ($_GET['action'] == 'count') {
   $start = 0;
   $nbre = 0;
-  foreach (Message::parse($mboxes[0], $start, 1000000) as $msg) {
+  foreach (Message::parse(__DIR__.'/mboxes/'.$mboxes[0], $start, 1000000) as $msg) {
     $nbre++;
   }
   echo "$nbre messages dans $mboxes[0]<br>\n";
