@@ -34,6 +34,8 @@ if (!isset($_GET['action'])) { // par défaut liste les messages
   $start = $_GET['start'] ?? 0;
   $max = $_GET['max'] ?? 10;
 
+  echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>list $mbox $start $max</title></head><body>\n";
+  
   $mboxSelect = "<select name='mbox'>";
   foreach ($mboxes as $pmbox)
     $mboxSelect .= "<option value='$pmbox'".($pmbox==$mbox ? ' selected':'').">$pmbox</option>";
@@ -79,7 +81,8 @@ if (!isset($_GET['action'])) { // par défaut liste les messages
   if ($start == -1) { // Fin de la bal atteinte
     echo "<a href='?start=0$params'>&lt;&lt; 0</a>\n";
     $prevStart = $curStart - $max;
-    echo "<a href='?start=$prevStart$params'>&lt; $prevStart</a>\n";
+    if ($prevStart > 0)
+      echo "<a href='?start=$prevStart$params'>&lt; $prevStart</a>\n";
   }
   elseif (!IndexFile::exists(__DIR__.'/mboxes/'.$mbox)) {
     //echo "nextStart=$start<br>\n";
@@ -103,6 +106,7 @@ if (!isset($_GET['action'])) { // par défaut liste les messages
 }
 
 if ($_GET['action'] == 'get') { // affiche un message donné défini par son offset 
+  echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>get $_GET[mbox] $_GET[offset]</title></head><body>\n";
   $msg = Message::get(__DIR__.'/mboxes/'.$_GET['mbox'], $_GET['offset']);
   echo "<table border=1>\n";
   $header = $msg->short_header();
@@ -189,7 +193,7 @@ if ($_GET['action'] == 'searchByContentType') {
   die();
 }
 
-// 15164 messages
+// 15128 messages dans 0entrant
 if ($_GET['action'] == 'count') {
   $start = 0;
   $nbre = 0;

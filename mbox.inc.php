@@ -511,7 +511,8 @@ class Message {
       $precLine = $line;
     }
     $msg = new Message($msgTxt, $offset);
-    yield $msg;
+    if ($msg->match($criteria))
+      yield $msg;
     $offset = -1;
     $start = -1;
     return;
