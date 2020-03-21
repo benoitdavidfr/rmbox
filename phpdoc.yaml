@@ -5,6 +5,10 @@ doc: |
   Décodage des messages présents dans le fichier.
   Affichage de la liste des messages correspondant à certains critères.
   Affichage d'un message particulier et notamment extraction des pièces jointes.
+  
+  Exemples:
+    type message/rfc822:
+      - http://localhost/rmbox/?action=get&mbox=0entrant&offset=3885060278&debug=true
 journal: |
   21/3/2020:
     - téléchargement d'une pièce jointe d'un message
