@@ -9,6 +9,7 @@ doc: |
 journal: |
   21/3/2020:
     - téléchargement d'une pièce jointe d'un message
+    - utilisation du fichier index s'il existe ; il peut être créé par read.php
   20/3/2020:
     - gestion de différents fichiers Mbox
     - déplacement de ttes les boites aux lettres dans le répertoire mboxes
@@ -53,7 +54,7 @@ if (!isset($_GET['action'])) { // par défaut liste les messages
   foreach (['From','To','Subject'] as $key)
     if (isset($_GET[$key]))
       $criteria[$key] = $_GET[$key];
-  foreach (Message::parse(__DIR__.'/mboxes/'.$mbox, $start, $max, $criteria) as $msg) {
+  foreach (Message::parseWithIdx(__DIR__.'/mboxes/'.$mbox, $start, $max, $criteria) as $msg) {
     $header = $msg->short_header();
     echo "<tr>";
     echo "<td><a href='?action=get&amp;mbox=$mbox&amp;offset=",$msg->offset(),"'>M</a></td>";

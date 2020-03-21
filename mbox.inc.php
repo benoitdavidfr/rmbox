@@ -29,6 +29,7 @@ doc: |
 journal: |
   21/3/2020:
     - téléchargement d'une pièce jointe d'un message
+    - ajout de l'utilisation d'un index pour analyser une bal
   20/3/2020:
     - ajout correction headers erronés
     - détection erreur sur http://localhost/rmbox/?action=get&mbox=Sent&offset=2002264646
@@ -389,12 +390,16 @@ class Message {
   
   /*PhpDoc: methods
   name: parse
-  title: "static function parse(string $path, int &$start=0, int $maxNbre=10, array $criteria=[]): \\Generator - analyse un fichier mbox et retourne des messages respectant les critères"
+  title: "static function parse(string $path, int &$start, int $maxNbre=10, array $criteria=[]): \\Generator -  retourne les premiers messages respectant les critères"
   doc: |
-    Le paramètre $start est retourné avec la valeur à utiliser dans l'appel suivant ou -1 si le fichier a été entièrement parcouru
-    Pour utiliser l'offset à la place de start utiliser la méthode parseUsingOffset()
+    Le paramètre $start est retourné avec la valeur à utiliser dans l'appel suivant ou -1 si le fichier a été entièrement parcouru.
+    C'est la méthode la plus simple pour parcourir un fichier Mbox mais elle n'est pas très efficace.
+    2 solutions pour un parcours plus efficace:
+      - si on connait l'offset du message de départ alors utiliser la méthode parseUsingOffset()
+      - sinon si un index a été créé alors utiliser parseWithIdx()
+      - sinon créer un index et revenir au cas précédent
   */
-  static function parse(string $path, int &$start=0, int $maxNbre=10, array $criteria=[]): \Generator {
+  static function parse(string $path, int &$start, int $maxNbre=10, array $criteria=[]): \Generator {
     if (!($mbox = @fopen($path, 'r')))
       die("Erreur d'ouverture de mbox $path");
     $precLine = false; // la ligne précédente
@@ -426,12 +431,36 @@ class Message {
   }
   
   /*PhpDoc: methods
+  name: parse
+  title: "static function parseWithIdx(string $path, int &$start, int $maxNbre=10, array $criteria=[]): \\Generator -  retourne les premiers messages respectant les critères en utilisant l'index s'il existe"
+  doc: |
+    Fonction similaire à parse(), utilise l'index s'il existe
+  */
+  static function parseWithIdx(string $path, int &$start, int $maxNbre=10, array $criteria=[]): \Generator {
+    if (!is_file("$path.idx")) {
+      return self::parse($path, $start, $maxNbre, $criteria);
+    }
+    if (!($idxfile = @fopen("$path.idx", 'r')))
+      die("Erreur d'ouverture de mbox $path.idx");
+    fseek($idxfile, $start * 21);
+    fscanf($idxfile, '%20d', $offset);
+    if (!$offset) {
+      $size = filesize("$path.idx")/21;
+      die("Erreur d'accès à l'index qui contient $size enregistrements\n");
+    }
+    echo "offset=$offset\n"; var_dump($offset);
+    fclose($idxfile);
+    return self::parseUsingOffset($path, $offset, $start, $maxNbre, $criteria);
+  }
+  
+  /*PhpDoc: methods
   name: parseUsingOffset
-  title: "static function parseUsingOffset(string $path, int &$offset, int $maxNbre=10, array $criteria=[]): \\Generator - analyse un fichier mbox à partir d'un offset et retourne des messages respectant les critères"
+  title: "static function parseUsingOffset(string $path, int &$offset, int &$start, int $maxNbre=10, array $criteria=[]): \\Generator - retourne les premiers messages respectant les critères à partir d'un offset"
   doc: |
     Le paramètre $offset est retourné avec la valeur à utiliser dans l'appel suivant ou -1 si le fichier a été entièrement parcouru
+    Le paramètre $start est incrémenté du nombre de messages parcourus, qu'ils soient sélectionnés ou non.
   */
-  static function parseUsingOffset(string $path, int &$offset, int $maxNbre=10, array $criteria=[]): \Generator {
+  static function parseUsingOffset(string $path, int &$offset, int &$start, int $maxNbre=10, array $criteria=[]): \Generator {
     if (!($mbox = @fopen($path, 'r')))
       die("Erreur d'ouverture de mbox $path");
     fseek($mbox, $offset);
@@ -441,6 +470,7 @@ class Message {
       $line = rtrim ($iline, "\r\n");
       if (($precLine !== false) && self::isStartOfMessage($precLine, $line)) { // detection d'un nouveau message
         $msg = new Message($msgTxt, $offset);
+        $start++;
         $offset = ftell($mbox) - strlen($iline); // l'offset du message suivant
         if ($msg->match($criteria)) {
           yield $msg;

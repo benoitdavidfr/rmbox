@@ -4,6 +4,8 @@ name: read.php
 title: read.php - exploitation d'un fichier Mbox en mode ligne de commande
 doc: |
 journal: |
+  21/3/2020:
+    - ajout de la création d'un index
   20/3/2020:
     - ajout des commandes listOffset, getOffset, offset et testDebordement
   18/3/2020:
@@ -11,8 +13,10 @@ journal: |
 functions:
 */
 
-//$path = __DIR__.'/mboxes/0entrant';
-$path = __DIR__.'/mboxes/Sent';
+$mbox = '0entrant';
+//$mbox = 'Sent';
+
+$path = __DIR__.'/mboxes/'.$mbox;
 
 require_once __DIR__.'/mbox.inc.php';
 
@@ -22,17 +26,19 @@ if ($argc == 1) { // menu
   echo "Les commandes:\n";
   echo "  - list [{start} [{max}]]: liste les en-tetes à partir de {start} (défaut 0) avec maximum max messages (défaut 10)\n";
   echo "  - listOffset {offset} [{max}]: liste les en-tetes à partir de {offset} avec maximum max messages (défaut 10)\n";
-  echo "  - get {Message-ID} : lit le message identifié par {Message-ID}\n";
-  echo "  - getOffset {offset} : lit le message commencant à l'offset {offset}\n";
-  echo "  - offset {offset} : lit le fichier commencant à l'offset {offset}\n";
+  echo "  - get {offset} : lit le message commencant à l'offset {offset}\n";
+  echo "  - getById {Message-ID} : lit le message identifié par {Message-ID}\n";
+  echo "  - offset {offset} : affiche le fichier commencant à l'offset {offset}\n";
   //echo "  - testDebordement : test du débordement d'un entier\n";
   echo "  - testSom : recherche des débuts de messages incorrects\n";
   echo "  - mboxes : liste des boites aux lettres\n";
+  echo "  - buildIdx : fabrique un index pour la Bal $mbox\n";
   die();
 }
 
 if ($argv[1] == 'list') {
-  foreach (Message::parse($path, $argv[2] ?? 0, $argv[3] ?? 10, []) as $msg) {
+  $start = $argv[2] ?? 0;
+  foreach (Message::parse($path, $start, $argv[3] ?? 10, []) as $msg) {
     echo json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
   }
   die();
@@ -49,7 +55,7 @@ if ($argv[1] == 'listOffset') {
   die();
 }
   
-if ($argv[1] == 'get') {
+if ($argv[1] == 'getById') { // lit le message identifié par {Message-ID}
   if ($argc < 3)
     die("Erreur paramètre Message-ID obligatoire\n");
   $msgs = Message::parse($path, 0, 1, ['Message-ID'=> "<$argv[2]>"]);
@@ -58,7 +64,7 @@ if ($argv[1] == 'get') {
   die();
 }
 
-if ($argv[1] == 'getOffset') {
+if ($argv[1] == 'get') { // lit le message commencant à l'offset {offset}
   if ($argc < 3)
     die("Erreur paramètre offset obligatoire\n");
   $msg = Message::get($path, $argv[2]);
@@ -142,6 +148,26 @@ if ($argv[1] == 'mboxes') { // liste des Bal
     if (preg_match('!\.(msf)$!', $filename))
       continue;
     echo "$filename\n";
+  }
+  die();
+}
+
+if ($argv[1] == 'buildIdx') {
+  if (!($idxfile = @fopen("$path.idx", 'w')))
+    die("Erreur d'ouverture de mbox $path.idx");
+  $start = 0;
+  foreach (Message::parse($path, $start, 999999, []) as $msg) {
+    //echo json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
+    fprintf($idxfile, "%20d\n", $msg->offset());
+  }
+  echo "Index construit pour $mbox\n";
+  die();
+}
+
+if ($argv[1] == 'parseWithIdx') {
+  $start = $argv[2] ?? 0;
+  foreach (Message::parseWithIdx($path, $start, $argv[3] ?? 10, []) as $msg) {
+    echo json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
   }
   die();
 }
