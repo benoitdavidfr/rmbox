@@ -23,6 +23,7 @@ ini_set('max_execution_time', 600);
 $mboxes = [  // liste des mbox possibles
   '0entrant', // messages entrants courants
   'Sent',     // messages sortants courants
+  'test',     // boite de test
   //'Sympa',  // copie des messages provenant de Sympa
 ];
 
@@ -66,17 +67,38 @@ if (!isset($_GET['action'])) { // par défaut liste les messages
     echo "</tr>\n";
   }
   echo "</table>\n";
-  if ($start <> -1) {
-    echo "nextStart=$start<br>\n";
-    echo "<td><a href='?start=$start";
-    foreach ($_GET as $k => $v) {
-      if ($k <> 'start')
-        echo "&amp;$k=",urlencode($v);
-    }
-    echo "'>$start &gt;<br>\n";
+  
+  //echo "newStart=$start<br>\n";
+  //echo "max=$max<br>\n";
+  $params = '';
+  foreach ($_GET as $k => $v) {
+    if ($k <> 'start')
+      $params .= "&amp;$k=".urlencode($v);
   }
-  echo "<a href='?action=listContentType&amp;mbox=$mbox&amp;max=1000'>listContentType</a><br>\n";
-  echo "<a href='?action=count'>count</a><br>\n";
+  $curStart = $_GET['start'] ?? 0;
+  if ($start == -1) { // Fin de la bal atteinte
+    echo "<a href='?start=0$params'>&lt;&lt; 0</a>\n";
+    $prevStart = $curStart - $max;
+    echo "<a href='?start=$prevStart$params'>&lt; $prevStart</a>\n";
+  }
+  elseif (!IndexFile::exists(__DIR__.'/mboxes/'.$mbox)) {
+    //echo "nextStart=$start<br>\n";
+    echo "<a href='?start=$start$params'>$start &gt;</a>\n";
+  }
+  else { // IndexFile exists
+    $idxFile = new IndexFile(__DIR__.'/mboxes/'.$mbox);
+    if ($curStart <> 0)
+      echo "<a href='?start=0$params'>&lt;&lt; 0</a>\n";
+    $prevStart = $curStart - $max;
+    if ($prevStart > 0)
+      echo "<a href='?start=$prevStart$params'>&lt; $prevStart</a>\n";
+    if ($start < $idxFile->size())
+      echo "<a href='?start=$start$params'>$start &gt;</a>\n";
+    $last = $idxFile->size() - $max;
+    echo "<a href='?start=$last$params'>$last &gt;&gt;</a>\n";
+  }
+  //echo "<a href='?action=listContentType&amp;mbox=$mbox&amp;max=1000'>listContentType</a><br>\n";
+  //echo "<a href='?action=count'>count</a><br>\n";
   die();
 }
 

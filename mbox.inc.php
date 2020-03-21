@@ -358,6 +358,39 @@ class Related extends MultiPart {
 };
 
 
+// utilisation d'un index
+class IndexFile {
+  protected $path; // chemin du fichier index
+  protected $file; // descripteur du fichier index
+  
+  // teste l'existence de l'index
+  static function exists(string $path) { return is_file("$path.idx"); }
+
+  function __construct(string $path) {
+    $this->path = "$path.idx";
+    if (!($this->file = @fopen($this->path, 'r')))
+      throw new Exception("Erreur d'ouverture de la mbox $path.idx");
+  }
+
+  function __destruct() { if ($this->file) fclose($this->file); }
+  
+  function size(): int { return filesize($this->path)/21; }
+  
+  function get(int $start): int {
+    if ($start >= $this->size()) {
+      $size = $this->size();
+      die("Erreur d'accès $start à l'index qui contient $size enregistrements\n");
+    }
+    fseek($this->file, $start * 21);
+    if (!fscanf($this->file, '%20d', $offset)) {
+      $size = $this->size();
+      die("Erreur d'accès $start à l'index qui contient $size enregistrements\n");
+    }
+    return $offset;
+  }
+};
+
+
 /*PhpDoc: classes
 name: Message
 title: classe Message - gestion d'un message ainsi que son extraction à partir d'un fichier Mbox
@@ -426,6 +459,8 @@ class Message {
       $msgTxt[] = $line; 
       $precLine = $line;
     }
+    $msg = new Message($msgTxt, $offset);
+    yield $msg;
     $start = -1;
     return;
   }
@@ -437,19 +472,11 @@ class Message {
     Fonction similaire à parse(), utilise l'index s'il existe
   */
   static function parseWithIdx(string $path, int &$start, int $maxNbre=10, array $criteria=[]): \Generator {
-    if (!is_file("$path.idx")) {
+    if (!IndexFile::exists($path)) {
       return self::parse($path, $start, $maxNbre, $criteria);
     }
-    if (!($idxfile = @fopen("$path.idx", 'r')))
-      die("Erreur d'ouverture de mbox $path.idx");
-    fseek($idxfile, $start * 21);
-    fscanf($idxfile, '%20d', $offset);
-    if (!$offset) {
-      $size = filesize("$path.idx")/21;
-      die("Erreur d'accès à l'index qui contient $size enregistrements\n");
-    }
-    echo "offset=$offset\n"; var_dump($offset);
-    fclose($idxfile);
+    $idx = new IndexFile($path);
+    $offset = $idx->get($start);
     return self::parseUsingOffset($path, $offset, $start, $maxNbre, $criteria);
   }
   
@@ -483,7 +510,10 @@ class Message {
       $msgTxt[] = $line; 
       $precLine = $line;
     }
+    $msg = new Message($msgTxt, $offset);
+    yield $msg;
     $offset = -1;
+    $start = -1;
     return;
   }
   
@@ -541,7 +571,7 @@ class Message {
   doc: |
   */
   function __construct(array $txt, int $offset) {
-    //echo "Message::__construct()<br>\n";
+    //echo "<pre>Message::__construct()<br>\n";
     $this->offset = $offset;
     //foreach ($txt as $line) echo "$line\n";
     $this->header[''] = [ array_shift($txt) ]; // Traitement de la première ligne d'en-tete
@@ -574,6 +604,7 @@ class Message {
     }
     // Fin correction
     $this->body = implode("\n", $txt);
+    //echo "Fin Message::__construct() "; print_r($this); echo "</pre>\n";
   }
   
   /*PhpDoc: methods

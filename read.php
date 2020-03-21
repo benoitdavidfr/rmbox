@@ -15,6 +15,7 @@ functions:
 
 $mbox = '0entrant';
 //$mbox = 'Sent';
+//$mbox = 'test';
 
 $path = __DIR__.'/mboxes/'.$mbox;
 
