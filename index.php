@@ -180,7 +180,7 @@ if ($_GET['action'] == 'sortEmail') { // tri les adresses par nom de domaine et 
   echo "<h2>Tri des adresses de $_GET[header] par domaine et si possible par nom</h2>\n";
   echo "Les libellés sont conservés mais un seul par adresse.</p>\n";
   $emails = []; // [ domain => [ email => [ label ] ] ]
-  foreach (explodeListEmails($msg->short_header()[$_GET['header']]) as $recipient) {
+  foreach (Message::explodeEmails($msg->short_header()[$_GET['header']]) as $recipient) {
     if (preg_match('!^(.*)<([-.a-zA-Z0-9]+)@([-.a-zA-Z0-9]+)>$!', $recipient, $matches)) {
       $label = $matches[1];
       $name = $matches[2];

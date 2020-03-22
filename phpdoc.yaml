@@ -9,6 +9,15 @@ doc: |
   Exemples:
     type message/rfc822:
       - http://localhost/rmbox/?action=get&mbox=0entrant&offset=3885060278&debug=true
+      
+  15128 messages
+  $ grep -G '^From: ' mboxes/0entrant | wc -l
+  15307
+  $ grep -G '^From - ' mboxes/0entrant | wc -l
+  15128
+  
+  
+
 journal: |
   22/3/2020:
     - ajout graph.php

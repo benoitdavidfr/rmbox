@@ -176,6 +176,7 @@ methods:
 class MonoPart extends Body {
   // liste des formats reconnus pour les fichiers attachés, utilisé dans un preg_match()
   static $attachFormats = [
+    'application/octet-stream',
     'application/pdf',
     'application/msword',
     'application/vnd\.oasis\.opendocument\.text',
@@ -254,7 +255,7 @@ class MonoPart extends Body {
   function name(): ?string {
     if (!preg_match('!^('.implode('|', self::$attachFormats).'); name="([^"]+)"$!', $this->type, $matches))
       return null;
-    return $matches[3];
+    return $matches[2];
   }
 
   // génère le téléchargement d'un fichier attaché
