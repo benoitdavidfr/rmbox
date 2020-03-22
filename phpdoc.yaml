@@ -12,7 +12,7 @@ doc: |
 journal: |
   22/3/2020:
     - ajout graph.php
-    - ajout Message::explodeEmails() et Message::clean_email() dans mbox.inc.php
+    - ajout Message::explodeEmails() et Message::cleanEmail() dans mbox.inc.php
     - renommage read.php en cmde.php
   21/3/2020:
     - téléchargement d'une pièce jointe d'un message

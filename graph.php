@@ -1,6 +1,9 @@
 <?php
-// graph.php - génère en sortie un fichier avec une ligne par adresse dans un mel en entrée et un poids associé sépars par un ;
-
+/*PhpDoc:
+name: graph.php
+title: graph.php - génère en sortie un fichier avec une ligne par adresse dans un mel en entrée et un poids associé
+doc: |
+*/
 require_once __DIR__.'/mbox.inc.php';
 
 
@@ -21,7 +24,7 @@ function showRecipients(string $recipients): string { // affichage des adresses
 }
 
 
-if (0) { // nbre de mails recus depuis l'adresse
+if (1) { // nbre de mails recus depuis l'adresse
   $mbox = '0entrant';
   $path = __DIR__.'/mboxes/'.$mbox;
 
@@ -33,7 +36,7 @@ if (0) { // nbre de mails recus depuis l'adresse
       //echo json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
       continue;
     }
-    $email = strToLower(clean_email($headers['From']));
+    $email = strToLower(Message::cleanEmail($headers['From']));
     if (!isset($emails[$email]))
       $emails[$email] = 1;
     else
@@ -114,7 +117,7 @@ if (1) { // nbre de mails envoyés à l'adresse
     //echo "recipients: $recipients\n";
     //echo "list:\n";
     foreach (Message::explodeEmails($recipients) as $recipient) {
-      $email = strToLower(Message::clean_email($recipient));
+      $email = strToLower(Message::cleanEmail($recipient));
       //echo "  - $email\n";
       if (!isset($emails[$email]))
         $emails[$email] = 1;

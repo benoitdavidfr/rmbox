@@ -30,7 +30,7 @@ doc: |
   inlineimage ::= content-type + Content-ID + contents
 journal: |
   22/3/2020:
-    - ajout Message::explodeEmails() et Message::clean_email()
+    - ajout Message::explodeEmails() et Message::cleanEmail()
   21/3/2020:
     - téléchargement d'une pièce jointe d'un message
     - ajout de l'utilisation d'un index pour analyser une bal
@@ -492,7 +492,7 @@ class Message {
   }
   
   // retourne l'adresse brute à partir d'une chaine la contenant
-  static function clean_email(string $email): string {
+  static function cleanEmail(string $email): string {
     if (preg_match('!^(.*)<([-_.@a-zA-Z0-9]+)>$!', $email, $matches))
       return $matches[2];
     elseif (preg_match('!^ *([-_.@a-zA-Z0-9]+)$!', $email, $matches))
