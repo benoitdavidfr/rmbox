@@ -1,7 +1,7 @@
 title: rmbox - extraction et utilisation de messages à partir d'un fichier Mbox
 path: /rmbox
 doc: |
-  Lecture d'un fichier Mbox (https://fr.wikipedia.org/wiki/Mbox) généré notamment par Thunderbird
+  Lecture et exploitation d'un fichier Mbox (https://fr.wikipedia.org/wiki/Mbox) généré notamment par Thunderbird
   Décodage des messages présents dans le fichier.
   Affichage de la liste des messages correspondant à certains critères.
   Affichage d'un message particulier et notamment extraction des pièces jointes.
@@ -11,7 +11,9 @@ doc: |
       - http://localhost/rmbox/?action=get&mbox=0entrant&offset=3885060278&debug=true
 journal: |
   22/3/2020:
-    - téléchargement d'une pièce jointe d'un message
+    - ajout graph.php
+    - ajout Message::explodeEmails() et Message::clean_email() dans mbox.inc.php
+    - renommage read.php en cmde.php
   21/3/2020:
     - téléchargement d'une pièce jointe d'un message
   20/3/2020:
