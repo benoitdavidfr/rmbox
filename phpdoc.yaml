@@ -10,6 +10,8 @@ doc: |
     type message/rfc822:
       - http://localhost/rmbox/?action=get&mbox=0entrant&offset=3885060278&debug=true
 journal: |
+  22/3/2020:
+    - téléchargement d'une pièce jointe d'un message
   21/3/2020:
     - téléchargement d'une pièce jointe d'un message
   20/3/2020:
