@@ -34,8 +34,8 @@ $mboxes = [
   'entrant201807-juil-sept',
   'entrant201810-oct-dec',
   'Sent',     // messages sortants courants
-  '../test',     // boite de test
-  '../testNonIdx',     // boite de test non indexée
+  '../baltest',     // boite de test
+  '../baltestNonIdx',     // boite de test non indexée
   //'Sympa',  // copie des messages provenant de Sympa
 ];
 
