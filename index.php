@@ -34,8 +34,8 @@ $mboxes = [
   'entrant201807-juil-sept',
   'entrant201810-oct-dec',
   'Sent',     // messages sortants courants
-  'test',     // boite de test
-  'testNonIdx',     // boite de test non indexée
+  '../test',     // boite de test
+  '../testNonIdx',     // boite de test non indexée
   //'Sympa',  // copie des messages provenant de Sympa
 ];
 
@@ -126,27 +126,11 @@ if (!isset($_GET['action'])) { // par défaut liste les messages
   die();
 }
 
-// une , est un séparateur d'adresse que si elle n'est pas à l'intérieur d'une ""
-function explodeListEmails(string $recipients): array {
-  //return explode(',', $recipients);
-  $pattern = '!^ *("[^"]*")?([^,]*),!';
-  $list = [];
-  while(preg_match($pattern, $recipients, $matches)) {
-    $list[] = $matches[1].$matches[2];
-    //echo "<pre>matches="; print_r($matches); echo "</pre>\n";
-    $recipients = preg_replace($pattern, '', $recipients);
-    // (count($list) > 100) die("FIN");
-  }
-  $list[] = $recipients;
-  //echo "<pre>list="; print_r($list); echo "</pre>\n";
-  return $list;
-}
-
 function showRecipients(string $recipients): string { // affichage des adresses
   //return htmlentities($recipients);
   $html = "<table border=1>\n";
   //$html .= "<th>libelle</th><th>adresse</th>\n";
-  foreach (explodeListEmails($recipients) as $recipient) {
+  foreach (Message::explodeEmails($recipients) as $recipient) {
     if (preg_match('!^(.*)<([-.@a-zA-Z0-9]+)>$!', $recipient, $matches))
       $html .= "<tr><td>".htmlentities($matches[1])."</td><td>$matches[2]</td></tr>\n";
     elseif (preg_match('!^[-.@a-zA-Z0-9]+$!', $recipient, $matches))

@@ -153,7 +153,7 @@ if ($argv[1] == 'mboxes') { // liste des Bal
   die();
 }
 
-if ($argv[1] == 'buildIdx') {
+if ($argv[1] == 'buildIdx') { // fabrique un index pour la Bal $mbox
   if (!($idxfile = @fopen("$path.idx", 'w')))
     die("Erreur d'ouverture de mbox $path.idx");
   $start = 0;
@@ -165,7 +165,7 @@ if ($argv[1] == 'buildIdx') {
   die();
 }
 
-if ($argv[1] == 'parseWithIdx') {
+if ($argv[1] == 'parseWithIdx') { // Test parseWithIdx
   $start = $argv[2] ?? 0;
   foreach (Message::parseWithIdx($path, $start, $argv[3] ?? 10, []) as $msg) {
     echo json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";

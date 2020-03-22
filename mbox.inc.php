@@ -29,6 +29,8 @@ doc: |
   related  ::= text/html + inlineimage+
   inlineimage ::= content-type + Content-ID + contents
 journal: |
+  22/3/2020:
+    - ajout Message::explodeEmails() et Message::clean_email()
   21/3/2020:
     - téléchargement d'une pièce jointe d'un message
     - ajout de l'utilisation d'un index pour analyser une bal
@@ -468,6 +470,37 @@ class Message {
   protected $body; // texte correspondant au corps du message avec séparateur \n entre lignes
   protected $offset; // offset du message dans le fichier mbox, -1 si il s'agit d'un message inclus dans un autre
   
+  // transformation d'une liste d'adresses email sous la forme d'une chaine en une liste de chaines
+  // une , est un séparateur d'adresse que si elle n'est pas à l'intérieur d'une ""
+  static function explodeEmails(string $recipients): array {
+    //return explode(',', $recipients);
+    $pattern = '!^ *("[^"]*")?([^,]+),?!';
+    $list = [];
+    while(preg_match($pattern, $recipients, $matches)) {
+      $list[] = $matches[1].$matches[2];
+      //echo "<pre>matches="; print_r($matches); echo "</pre>\n";
+      $recipients = preg_replace($pattern, '', $recipients);
+      //if (count($list) > 100) die("FIN");
+    }
+    //echo "<pre>list="; print_r($list); echo "</pre>\n";
+    return $list;
+  }
+
+  static function testExplodeEmails() {
+    header('Content-type: text/plain; charset="utf-8"');
+    print_r(self::explodeEmails('"jaquemet, Clément " <Clement.Jaquemet@developpement-durable.gouv.fr>'));
+  }
+  
+  // retourne l'adresse brute à partir d'une chaine la contenant
+  static function clean_email(string $email): string {
+    if (preg_match('!^(.*)<([-_.@a-zA-Z0-9]+)>$!', $email, $matches))
+      return $matches[2];
+    elseif (preg_match('!^ *([-_.@a-zA-Z0-9]+)$!', $email, $matches))
+      return $matches[1];
+    else
+      return $email;
+  }
+  
   // detection du début d'un nouveau message avec $line
   // Gestion d'un bug dans le fichier des messages:
   // Lorsque le calendrier insère un message, celui-ci ne se termine pas par une ligne vide mais par une ligne boundary
@@ -743,3 +776,13 @@ class Message {
   // télécharge une pièce jointe
   function dlAttached(string $name, bool $debug) { $this->body()->dlAttached($name, $debug); }
 }
+
+
+if (basename(__FILE__)<>basename($_SERVER['PHP_SELF'])) return;
+
+
+if (1) { // Test explodeListEmails()
+  Message::testExplodeEmails();
+  die("FIN testExplodeEmails");
+}
+
