@@ -21,7 +21,8 @@ journal: |
 submodules:
 phpScripts:
   - /rmbox/index.php
-  - /rmbox/read.php
+  - /rmbox/cmde.php
+  - /rmbox/graph.php
 phpIncludes:
   - /rmbox/mbox.inc.php
 htmlFiles:

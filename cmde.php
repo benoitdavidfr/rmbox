@@ -1,7 +1,7 @@
 <?php
 /*PhpDoc:
-name: read.php
-title: read.php - exploitation d'un fichier Mbox en mode ligne de commande
+name: cmde.php
+title: cmde.php - exploitation d'un fichier Mbox en mode ligne de commande
 doc: |
 journal: |
   21/3/2020:
