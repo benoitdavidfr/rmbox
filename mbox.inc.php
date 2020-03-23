@@ -3,8 +3,6 @@
 name: mbox.inc.php
 title: mbox.inc.php - définition de classes pour gérer les messages d'un fichier Mbox
 doc: |
-  Le type message/rfc822 ne respecte pas la logique définie ci-dessous.
-
   La classe Message gère un message ainsi que les fonctions d'extraction d'un message à partir d'un fichier Mbox.
   Un message est composé d'en-têtes et d'un corps.
   Ce corps est géré par la classe abstraite Body.
@@ -28,6 +26,9 @@ doc: |
   alternative ::= body+
   related  ::= text/html + inlineimage+
   inlineimage ::= content-type + Content-ID + contents
+
+  La logique actuelle ne permet pas d'extraire une PJ d'un message en PJ d'un autre.
+  Il faudrait un accès plus générique à une PJ, par exemple en définissant un chemin au sein 
 journal: |
   23/3/2020:
     - correction d'un bug dans Message::parse()
