@@ -24,11 +24,13 @@ doc: |
   contents  ::= chaine d'octets
   multiPart ::= mixed | alternative | related | report
   mixed     ::= body + attachment+
-  attachment ::= content-type + name + contents
+  attachment ::= content-type + name + contents | message
   alternative ::= body+
   related  ::= text/html + inlineimage+
   inlineimage ::= content-type + Content-ID + contents
 journal: |
+  23/3/2020:
+    - correction d'un bug dans Message::parse()
   22/3/2020:
     - ajout Message::explodeEmails() et Message::cleanEmail()
   21/3/2020:
@@ -554,7 +556,9 @@ class Message {
       $precLine = $line;
     }
     $msg = new Message($msgTxt, $offset, true);
-    yield $msg;
+    if ($msg->match($criteria)) {
+      yield $msg;
+    }
     $start = -1;
     return;
   }

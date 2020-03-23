@@ -29,10 +29,14 @@ ini_set('max_execution_time', 600);
 // liste des mbox possibles, la première est par défaut
 $mboxes = [
   '0entrant', // messages entrants courants
-  'entrant201801-janv-mars',
-  'entrant201804-avril-juin',
-  'entrant201807-juil-sept',
   'entrant201810-oct-dec',
+  'entrant201807-juil-sept',
+  'entrant201804-avril-juin',
+  'entrant201801-janv-mars',
+  'entrant201710-oct-dec',
+  'entrant201707-juil-sept',
+  'entrant201704-avril-juin',
+  'entrant201701-janv-mars',
   'Sent',     // messages sortants courants
   '../baltest',     // boite de test
   '../baltestNonIdx',     // boite de test non indexée
