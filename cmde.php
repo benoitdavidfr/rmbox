@@ -4,6 +4,10 @@ name: cmde.php
 title: cmde.php - exploitation d'un fichier Mbox en mode ligne de commande
 doc: |
 journal: |
+  26/3/2020:
+    - ajout de la commande listContentType en lien avce ctype.inc.php
+  25/3/2020:
+    - ajout de la création d'un index
   21/3/2020:
     - ajout de la création d'un index
   20/3/2020:
@@ -31,9 +35,11 @@ if ($argc == 1) { // menu
   echo "  - getById {Message-ID} : lit le message identifié par {Message-ID}\n";
   echo "  - offset {offset} : affiche le fichier commencant à l'offset {offset}\n";
   //echo "  - testDebordement : test du débordement d'un entier\n";
-  echo "  - testSom : recherche des débuts de messages incorrects\n";
   echo "  - mboxes : liste des boites aux lettres\n";
   echo "  - buildIdx : fabrique un index pour la Bal $mbox\n";
+  echo "  - parseWithIdx [{start} [{max}]] : liste les en-têtes avec parseWithIdx()\n";
+  echo "  - listContentType [{start} [{max}]] : liste les Content-Type\n";
+  echo "  - parseContentTypes : analyse les Content-Type\n";
   die();
 }
 
@@ -56,20 +62,20 @@ if ($argv[1] == 'listOffset') {
   die();
 }
   
-if ($argv[1] == 'getById') { // lit le message identifié par {Message-ID}
-  if ($argc < 3)
-    die("Erreur paramètre Message-ID obligatoire\n");
-  $msgs = Message::parse($path, 0, 1, ['Message-ID'=> "<$argv[2]>"]);
-  echo json_encode(['header'=> $msgs[0]->short_header(), 'body'=> $msgs[0]->body()],
-    JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
-  die();
-}
-
 if ($argv[1] == 'get') { // lit le message commencant à l'offset {offset}
   if ($argc < 3)
     die("Erreur paramètre offset obligatoire\n");
   $msg = Message::get($path, $argv[2]);
   echo json_encode(['header'=> $msg->short_header(), 'body'=> $msg->body()],
+    JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
+  die();
+}
+
+if ($argv[1] == 'getById') { // lit le message identifié par {Message-ID}
+  if ($argc < 3)
+    die("Erreur paramètre Message-ID obligatoire\n");
+  $msgs = Message::parse($path, 0, 1, ['Message-ID'=> "<$argv[2]>"]);
+  echo json_encode(['header'=> $msgs[0]->short_header(), 'body'=> $msgs[0]->body()],
     JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
   die();
 }
@@ -94,33 +100,13 @@ if ($argv[1] == 'testDebordement') { // Test nombre entier maximum
   die();
 }
 
-// From - Mon Jul 04 08:26:16 2016
-function isStartOfMessage(string $precLine, string $line): bool {
-  return (strncmp($line, 'From - ', 7)==0)
-    && preg_match('!^From - [a-zA-Z]{3} [a-zA-Z]{3} \d\d \d\d:\d\d:\d\d \d\d\d\d$!', $line);
-}
-
-if ($argv[1] == 'testSom') { // recherche des débuts de messages incorrects
-  if (!($mbox = @fopen($path, 'r')))
-    die("Erreur d'ouverture de mbox $path");
-  $precLine = "initialisée <> '' pour éviter une détection sur la première ligne"; // la ligne précédente
-  while ($iline = fgets($mbox)) {
-    $line = rtrim ($iline, "\r\n");
-    if ((strncmp($line, 'From ', 5)==0) xor isStartOfMessage($precLine, $line)) {
-      echo "$precLine\n$line\n--\n";
-    }
-    $precLine = $line;
-  }
-  die();
-}
-
-/*PhpDoc: functions
+{/*PhpDoc: functions
 name: readfiles
 title: "function readfiles(string $dir, bool $recursive=false): array - Lecture des fichiers locaux du répertoire $dir"
 doc: |
   Le système d'exploitation utilise ISO 8859-1, toutes les données sont gérées en UTF-8
   Si recursive est true alors renvoie l'arbre
-*/
+*/}
 function readfiles(string $dir, bool $recursive=false): array { // lecture des nom, type et date de modif des fichiers d'un rép.
   $dirIso = utf8_decode($dir);
   if (!$dh = opendir($dirIso))
@@ -170,6 +156,122 @@ if ($argv[1] == 'parseWithIdx') { // Test parseWithIdx
   foreach (Message::parseWithIdx($path, $start, $argv[3] ?? 10, []) as $msg) {
     echo json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
   }
+  die();
+}
+
+/*class Tree {
+  protected $label; // string
+  protected $children; // [ Tree ]
+  
+  function __construct(string $label, array $children) {
+    $this->label = $label;
+    $this->children = $children;
+  }
+  
+  function show(int $level=0) {
+    echo str_repeat('----', $level),$this->label,"\n";
+    foreach ($this->children as $child) {
+      $child->show($level+1);
+    }
+  }
+};*/
+
+/*function treeOfContentTypes(string $ctype, Body $body): Tree {
+  $children = [];
+  foreach ($body->parts() as $part) {
+    //echo "part's type=",$part->type(),"\n";
+    if (!$part->isMulti()) {
+      $children[] = new Tree($part->type(), []);
+    }
+    else {
+      $children[] = treeOfContentTypes($part->type(), $part);
+    }
+  }
+  return new Tree($ctype, $children);
+  //die("FIN ligne ".__LINE__."\n");
+}*/
+
+// balayage recursif des parties pour y récupérer les ctypes
+function listOfContentTypes(&$fout, array &$contentTypes, Body $body) {
+  foreach ($body->parts() as $part) {
+    $contentType = CType::simplified($part->type());
+    fwrite($fout, "$contentType\n");
+    if (!isset($contentTypes[$contentType]))
+      $contentTypes[$contentType] = 1;
+    else
+      $contentTypes[$contentType]++;
+    if ($part->isMulti())
+      listOfContentTypes($fout, $contentTypes, $part);
+  }
+}
+
+// liste les Content-Type et crée le fichier contentTypes.txt des libellés simplifiés
+// N'entre pas dans l'analyse détaillé du Content-Type pour éviter les bloquages
+// Les en-têtes simplifiées sont stockées dans simplContentTypes.txt et celles détaillées dans detailContentTypes.txt
+if ($argv[1] == 'listContentType') {
+  require_once 'ctype.inc.php';
+
+  $start = $argv[2] ?? 0;
+  $fout = fopen('detailContentTypes.txt', 'w');
+  $contentTypes = [];
+  foreach (Message::parse($path, $start, $argv[3] ?? 99999, []) as $msg) {
+    $contentType = $msg->short_header()['Content-Type'] ?? '';
+    fwrite($fout, "$contentType\n");
+    $contentType = CType::simplified($contentType);
+    //echo "Content-Type=$contentType\n";
+    if (!isset($contentTypes[$contentType]))
+      $contentTypes[$contentType] = 1;
+    else
+      $contentTypes[$contentType]++;
+    if (1 && CType::testIsMulti($contentType)) { // balaie récursivement les parties pour récupérer les ctypes
+      //echo "Content-Type=$contentType\n";
+      $body = Message::get($path, $msg->short_header()['offset'])->body();
+      //echo "treeOfContentTypes:\n";
+      //treeOfContentTypes($contentType, $body)->show();
+      //treeOfContentTypes($contentType, $body);
+      listOfContentTypes($fout, $contentTypes, $body);
+    }
+  }
+  fclose($fout);
+  $fout = fopen('simplContentTypes.txt', 'w');
+  foreach ($contentTypes as $contentType => $nbre) {
+    echo "contentType=$contentType -> $nbre\n";
+    fwrite($fout, "$contentType\t$nbre\n");
+  }
+  fclose($fout);
+  die();
+}
+
+// exploite le fichier contentTypes.txt pour effectuer une analyse des différents Content-Type
+if ($argv[1] == 'parseContentTypes') {
+  require_once 'ctype.inc.php';
+  
+  $fin = fopen('contentTypes.txt', 'r');
+  $types = [];
+  $charsets = [];
+  $subtypes = [];
+  while ($buff = fgets($fin)) {
+    $buff = rtrim($buff);
+    list($contentType, $nbre) = explode("\t", $buff);
+    echo "contentType=$contentType -> $nbre\n";
+    $cType = CType::create($contentType);
+    if ($cType->isMono()) {
+      if (!in_array($cType->type(), $types))
+        $types[] = $cType->type();
+      if (!in_array($cType->charset(), $charsets))
+        $charsets[] = $cType->charset();
+    }
+    else {
+      echo "subtype=",$cType->subtype(),"\n";
+      if (!in_array($cType->subtype(), $subtypes))
+        $subtypes[] = $cType->subtype();
+    }
+  }
+  echo "Mono:\n";
+  echo "types="; print_r($types);
+  echo "charsets="; print_r($charsets);
+  echo "Multi:\n";
+  echo "subtypes="; print_r($subtypes);
   die();
 }
 

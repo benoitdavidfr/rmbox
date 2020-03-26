@@ -19,6 +19,8 @@ doc: |
   
 
 journal: |
+  25/3/2020:
+    - ajout ctype.inc.php et commandes listContentType + parseContentTypes l'utilisant
   22/3/2020:
     - ajout graph.php
     - ajout Message::explodeEmails() et Message::cleanEmail() dans mbox.inc.php
@@ -37,6 +39,7 @@ phpScripts:
   - /rmbox/cmde.php
   - /rmbox/graph.php
 phpIncludes:
+  - /rmbox/ctype.inc.php
   - /rmbox/mbox.inc.php
 htmlFiles:
 

@@ -70,7 +70,9 @@ abstract class Body {
   
   // crée un nouveau Body en fonction du type, les headers complémentaires sont utilisés pour les parties de multi-parties
   static function create(string $type, string $contents, array $headers=[]): Body {
-    if (substr($type, 0, 15) == 'multipart/mixed')
+    if ((substr($type, 0, 15) == 'multipart/mixed') || (substr($type, 0, 14) == 'ultipart/mixed'))
+      return new Mixed($type, $contents);
+    elseif (substr($type, 0, 16) == 'multipart/report')
       return new Mixed($type, $contents);
     elseif (substr($type, 0, 21) == 'multipart/alternative')
       return new Alternative($type, $contents);
@@ -83,7 +85,9 @@ abstract class Body {
   }
   
   // retire les headers et les renvoient séparés sous la forme [ key => value ]
+  // ERREUR sur les textes indiquant qu'il s'agit d'un format MIME
   static function extractHeaders(array &$text): array {
+    $stext = $text;
     $headers = [];
     $key = '';
     while ($line = array_shift($text)) { // les headers s'arrête à la première ligne vide
@@ -91,8 +95,10 @@ abstract class Body {
         $pos = strpos($line, ': ');
         $key = substr($line, 0, $pos);
         $line = substr($line, $pos+2);
-        if (isset($headers[$key]))
-          echo "headers[$key] == ",$headers[$key]," && = $line<br>\n";
+        if (isset($headers[$key])) {
+          echo "headers[$key] == ",$headers[$key]," && line = $line<br>\n";
+          //echo "stext="; print_r($stext);
+        }
         $headers[$key] = $line;
       }
       else {
@@ -142,6 +148,10 @@ abstract class Body {
     $this->headers = $headers;
   }
 
+  function type() { return $this->type; }
+  
+  function isMulti() { return false; }
+  
   // chaque objet doit être capable de s'afficher sous la forme d'un texte HTML
   // Si et ssi $debug est vrai alors affichage d'infos détaillées de debug
   abstract function asHtml(bool $debug): string;
@@ -226,6 +236,9 @@ class MonoPart extends Body {
         $html .= $contents;
       return $html;
     }
+    elseif ($this->type == 'message/delivery-status') {
+      return '<pre><b>'.$this->type."</b><br>\n".htmlentities($this->contents).'</pre>';
+    }
     elseif (preg_match('!^(image/(png|jpeg|gif))!', $this->type, $matches)) {
       $type = $matches[1];
       $ctEncoding = $this->headers['Content-Transfer-Encoding'] ?? null;
@@ -283,14 +296,19 @@ doc: |
 methods:
 */
 abstract class MultiPart extends Body {
+  function isMulti() { return true; }
+  
   // renvoie la boundary déduite du Content_Type
   function boundary(): string {
-    if (preg_match('!^multipart/(mixed|alternative|related); +boundary=("([^"]*)"|.*)!', $this->type, $matches)) {
+    $pattern = '!^m?ultipart/(mixed|alternative|related|report);'
+        .'( +report-type=(delivery-status|disposition-notification);| +type="multipart/alternative";)?'
+        .' +boundary=("([^"]*)"|.*)!';
+    if (preg_match($pattern, $this->type, $matches)) {
       //print_r($matches);
-      if (isset($matches[3]))
-        return $matches[3];
+      if (isset($matches[5]))
+        return $matches[5];
       else
-        return $matches[2];
+        return $matches[4];
     }
     else
       throw new Exception("MultiPart::boundary() impossible sur type='".$this->type."'");
@@ -335,6 +353,7 @@ abstract class MultiPart extends Body {
 name: Mixed
 title: class Mixed extends MultiPart - Composition mixte, typiquement un texte de message avec des fichiers attachés
 doc: |
+  aussi utilisé pour 'multipart/report'
 methods:
 */
 class Mixed extends MultiPart {
