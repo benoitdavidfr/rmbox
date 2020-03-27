@@ -5,7 +5,8 @@ doc: |
   Décodage des messages présents dans le fichier.
   Affichage de la liste des messages correspondant à certains critères.
   Affichage d'un message particulier et notamment extraction des pièces jointes.
-  
+  Recherche de messages selon certains critères.
+
   Exemples:
     type message/rfc822:
       - http://localhost/rmbox/?action=get&mbox=0entrant&offset=3885060278&debug=true
@@ -16,7 +17,12 @@ doc: |
   $ grep -G '^From - ' mboxes/0entrant | wc -l
   15128
 
+  Le code pourrait être amélioré:
+    - en utilisant les fonctions de ctype dans mbox
+    - en vérifiant que les cas recensés dans la commande parseContentTypes sont traités dans mbox
 journal: |
+  27/3/2020:
+    - amélioration de mbox.inc.php notamment de décodage des en-têtes, mutualisation de cette fonction entre Body et Message
   25/3/2020:
     - ajout ctype.inc.php et commandes listContentType + parseContentTypes l'utilisant
   22/3/2020:
