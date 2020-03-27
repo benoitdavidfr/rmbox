@@ -35,10 +35,9 @@ abstract class CType {
   protected $srce;
   
   // indique si le Content-Type correspond ou non à un type multi-parties
-  static function testIsMulti(string $cType): bool {
-    return (strncmp($cType, 'multipart/', 10) == 0);
-  }
+  static function testIsMulti(string $cType): bool { return (strncmp($cType, 'multipart/', 10) == 0); }
   
+  /* N'est plus utilisé
   // supprime la boundary ou le name pour rendre le type plus simple et limiter le nombre de cas
   static function simplified(string $cType): string {
     if (self::testIsMulti($cType)) {
@@ -59,7 +58,7 @@ abstract class CType {
       else
         return $cType;
     }
-  }
+  }*/
   
   static function create(string $cType): CType {
     if (self::testIsMulti($cType))

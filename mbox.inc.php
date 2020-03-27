@@ -3,15 +3,18 @@
 name: mbox.inc.php
 title: mbox.inc.php - définition de classes pour gérer les messages d'un fichier Mbox
 doc: |
-  La classe Message gère un message ainsi que les fonctions d'extraction d'un message à partir d'un fichier Mbox.
+  La classe Message gère un message ainsi que les fonctions d'analyse d'un ficher Mbox pour en extraire un ou plusieurs messages.
   Un message est composé d'en-têtes et d'un corps.
-  Ce corps est géré par la classe abstraite Body.
-  Ce corps du message peut être soit :
+  Ce corps est géré par la classe abstraite Body qui peut être utilisée récursivement.
+  Il peut être soit :
     - composé d'une seule partie (classe MonoPart)
     - composé de plusieurs parties (classe MultiPart) et peut alors être :
       - une composition mixte, typiquement un texte de message avec des fichiers attachés (classe Mixed)
+      - une composition de type report, on utilise alors aussi la classe Mixed,
       - une alternative entre plusieurs éléments, typiquement un texte de message en plain/text et en Html (classe Alternative)
       - un ensemble d'éléments liés, typiquement un texte Html avec des images associées en ligne (classe Related)
+
+  La classe Index gère l'index au sein d'un fichier Mbox.
 
   message ::= header+ + body
   header ::= content-type | Content-Transfer-Encoding | ...
@@ -63,17 +66,34 @@ classes:
 
 /*PhpDoc: classes
 name: Body
-title: abstract class Body - Corps d'un message ou partie
+title: abstract class Body - Corps d'un message ou partie d'un corps
 doc: |
+  Les en-têtes sont stockés dans un dictionnaire indexé par la clé de l'en-tête ;
+  la valeur contient soit une chaine soit une liste de chaines.
+  Pour les clés définies dans SimpleHeaderKeys, la valeur est forcément une chaine.
 methods:
 */
 abstract class Body {
-  // Corrections des headers erronés Content-type -> Content-Type utilisées dans extractHeaders()
+  // Corrections de la clé identifiant les headers d'un message ou d'un Body, utilisé dans extractHeaders()
   const HeaderCorrections = [
     'Content-type' => 'Content-Type',
+    'CC' => 'Cc',
+  ];
+  // Liste de Headers qui doivent être simples, cad que al valeur du dictionnaire est une chaine ; utilisée dans extractHeaders()
+  const SimpleHeaderKeys = [
+    'Message-ID',
+    'Return-Path',
+    'Subject',
+    'From',
+    'Organization',
+    'To',
+    'Cc',
+    'Date',
+    'Content-Type',
+    'Content-Transfer-Encoding'
   ];
   protected $type; // string - le type MIME du contenu
-  protected $headers=[]; // [ key -> string ] - les autres en-têtes
+  protected $headers=[]; // [ key -> (string | [ string ]) ] - les autres en-têtes
   protected $contents; // string - le contenu comme chaine d'octets évent. décodé en fonction de Content-Transfer-Encoding
   
   // crée un nouveau Body en fonction du type, les headers complémentaires sont utilisés pour les parties de multi-parties
@@ -93,7 +113,9 @@ abstract class Body {
       return new MonoPart($type, $contents);
   }
   
-  // retire les headers et les renvoient séparés sous la forme [ key => value ]
+  // retire les headers et les renvoient séparés sous la forme [ key => (string | [ string ]) ] 
+  // si la clé du header appartient à SimpleHeaderKeys alors la forme est [ key => string ]
+  // Cette fonction est utilisée à la fois par Body::createFromPart() et Message::__construct()
   static function extractHeaders(array &$text): array {
     $stext = $text; // sauvegarde du texte en entrée avant modification
     $htext = []; // partie du texte correspondant aux headers
@@ -108,6 +130,7 @@ abstract class Body {
     // on construit dans un second temps le tableau des headers 
     $headers = [];
     foreach ($htext as $line) {
+      // détection de la clé
       if (($pos = strpos($line, ':')) === FALSE) {
         echo "clé absente dans Body::extractHeaders() sur ";
         echo "<pre>headers="; print_r($headers);
@@ -115,21 +138,31 @@ abstract class Body {
         throw new Exception("clé absente dans Body::extractHeaders()");
       }
       $key = substr($line, 0, $pos);
-      // Correction des headers erronés Content-type -> Content-Type
+      
+      // Correction des clés de header erronées Content-type -> Content-Type
       if (isset(self::HeaderCorrections[$key]))
         $key = self::HeaderCorrections[$key];
-      if (isset($headers[$key])) {
-        echo "Erreur d'écrasement dans Body::extractHeaders(), headers[$key] == ",$headers[$key]," && line == $line<br>\n";
-        //echo "stext="; print_r($stext);
-      }
-      // Généraement le séparateur en la clé et la valeur est ': '
-      // Mais dans certains cas on trouve ':' sans blanc
+      
+      // Normalement le séparateur de la clé est la chaine est ': '
+      // Mais dans certains cas on trouve ':' sans blanc, ex: http://localhost/rmbox/?action=get&mbox=0entrant&offset=3232652990
       if (substr($line, $pos+1, 1) == ' ')
         $line = substr($line, $pos+2);
       else
         $line = substr($line, $pos+1);
-      $headers[$key] = @iconv_mime_decode($line);
+      
+      // stockage du header dans la variable headers
+      if (!isset($headers[$key]))
+        $headers[$key] = @iconv_mime_decode($line); // la première valeur est stockée directement
+      elseif (in_array($key, self::SimpleHeaderKeys)) { // si la clé appartient à SimpleHeaderKeys alors écrasement avec alerte
+        echo "Erreur d'écrasement dans Body::extractHeaders(), headers[$key] == ",$headers[$key]," && line == $line<br>\n";
+        $headers[$key] = @iconv_mime_decode($line);
+      }
+      elseif (is_string($headers[$key])) // Si elle n'y appartient pas alors stockage dans un array
+        $headers[$key] = [$headers[$key], $line]; // pour la seconde création de l'array
+      else
+        $headers[$key][] = $line; // à partir de la 3ème ajout dans l'array
     }
+    //echo "<pre>Body::extractHeaders() returns: "; print_r($headers); echo "</pre>\n";
     return $headers;
   }
   
@@ -501,12 +534,8 @@ doc: |
 methods:
 */
 class Message {
-  // Corrections de la clé identifiant les headers d'un message
-  const HeaderCorrections = [
-    'Content-type' => 'Content-Type',
-    'CC' => 'Cc',
-  ];
-  protected $header=[]; // dictionnaire des en-têtes, key -> liste(string)
+  protected $firstLine = ''; // recopie de la première ligne
+  protected $headers=[]; // dictionnaire des en-têtes, [ key -> (string | liste(string)) ]
   protected $body; // texte correspondant au corps du message avec séparateur \n entre lignes
   protected $offset; // offset du message dans le fichier mbox, -1 si il s'agit d'un message inclus dans un autre
   
@@ -681,8 +710,8 @@ class Message {
   doc: |
   */
   function body(): Body {
-    $contents = decodeContents($this->header['Content-Transfer-Encoding'][0] ?? '', $this->body);
-    return Body::create($this->header['Content-Type'][0] ?? '', $contents);
+    $contents = decodeContents($this->headers['Content-Transfer-Encoding'] ?? '', $this->body);
+    return Body::create($this->headers['Content-Type'] ?? '', $contents);
   }
   
   /*PhpDoc: methods
@@ -703,46 +732,13 @@ class Message {
   doc: |
     Si $onlyHeaders est mis à true alors l'objet ne contiendra que ses headers permettant ainsi d'économiser de la mémoire.
   */
-  function __construct(array $txt, int $offset=-1, bool $onlyHeaders=false) {
+  function __construct(array $text, int $offset=-1, bool $onlyHeaders=false) {
     //echo "<pre>Message::__construct()<br>\n";
-    $stext = $txt; // sauvegarde de $txt
+    $stext = $text; // sauvegarde de $txt
     $this->offset = $offset;
-    //foreach ($txt as $line) echo "$line\n";
-    $this->header[''] = [ array_shift($txt) ]; // Traitement de la première ligne d'en-tete
-    $htext = []; // premières lignes correspondant aux headers
-    while ($line = array_shift($txt)) { // le header s'arrête à la première ligne vide
-      if (in_array(substr($line, 0, 1), ["\t", ' '])) // c'est une ligne suite
-        $htext[count($htext)-1] .= ' '.substr($line, 1);
-      else
-        $htext[] = $line;
-    }
-    // à ce stade les headers sont extraits de $txt et copiés dans $htext
-    // la ligne vide entre les en-têtes et le corps est supprimée de $txt et n'est pas copiée dans $htext
-    // on construit dans un second temps le tableau des headers 
-    foreach ($htext as $line) {
-      if (($pos = strpos($line, ':')) === FALSE) {
-        echo "clé absente dans Message::__construct() sur ";
-        echo "<pre>headers="; print_r($headers);
-        echo "<pre>stext="; print_r($stext);
-        throw new Exception("clé absente dans Body::extractHeaders()");
-      }
-      $key = substr($line, 0, $pos);
-      // Correction des headers erronés Content-type -> Content-Type, ...
-      if (isset(self::HeaderCorrections[$key]))
-        $key = self::HeaderCorrections[$key];
-      // Généralement le séparateur est la valeur est ': '
-      // Mais dans certains cas on trouve ':' sans blanc
-      if (substr($line, $pos+1, 1) == ' ')
-        $line = substr($line, $pos+2);
-      else
-        $line = substr($line, $pos+1);
-      $line = @iconv_mime_decode($line);
-      if (!isset($this->header[$key]))
-        $this->header[$key] = [ $line ];
-      else
-        $this->header[$key][] = $line;
-    }
-    $this->body = $onlyHeaders ? null : implode("\n", $txt);
+    $this->firstLine = [ array_shift($text) ]; // Suppression de la 1ère ligne d'en-tête qui est aussi le séparateur entre messages
+    $this->headers = Body::extractHeaders($text);
+    $this->body = $onlyHeaders ? null : implode("\n", $text);
     //echo "Fin Message::__construct() "; print_r($this); echo "</pre>\n";
   }
   
@@ -750,23 +746,13 @@ class Message {
   name: short_header
   title: "function short_header(): array - retourne un en-tête restreint sous la forme [key -> string]"
   doc: |
+    On utilise la liste des keys pour lesquelles headers contient forcément un string et pas un [ string ]
   */
   function short_header(): array {
     $short = [];
-    foreach ([
-        'Message-ID',
-        'Return-Path',
-        'Subject',
-        'From',
-        'Organization',
-        'To',
-        'Cc',
-        'Date',
-        'Content-Type',
-        'Content-Transfer-Encoding'
-      ] as $key) {
-      if (isset($this->header[$key]))
-        $short[$key] = $this->header[$key][0];
+    foreach (Body::SimpleHeaderKeys as $key) {
+      if (isset($this->headers[$key]))
+        $short[$key] = $this->headers[$key];
     }
     return array_merge($short,['offset'=>$this->offset]);
   }
