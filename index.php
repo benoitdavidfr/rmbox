@@ -12,6 +12,8 @@ doc: |
     - connaitre le nombre de messages,
     - se positionner efficacement vers la fin de la bal.
 journal: |
+  27/3/2020:
+    - correction bug
   21/3/2020:
     - téléchargement d'une pièce jointe d'un message
     - utilisation du fichier index s'il existe ; il peut être créé par read.php
@@ -38,6 +40,7 @@ $mboxes = [
   'entrant201704-avril-juin',
   'entrant201701-janv-mars',
   'Sent',     // messages sortants courants
+  '../listes/ogc.mbox', // boite téléchargée le 27/3/2020
   '../baltest',     // boite de test
   '../baltestNonIdx',     // boite de test non indexée
   //'Sympa',  // copie des messages provenant de Sympa
@@ -71,7 +74,7 @@ if (!isset($_GET['action'])) { // par défaut liste les messages
   echo "<table border=1><th>M</th><th>From</th><th>To</th><th>Date</th><th>Subject</th>\n";
   $criteria = [];
   foreach (['From','To','Subject'] as $key)
-    if (isset($_GET[$key]))
+    if (isset($_GET[$key]) && $_GET[$key])
       $criteria[$key] = $_GET[$key];
   foreach (Message::parseWithIdx(__DIR__.'/mboxes/'.$mbox, $start, $max, $criteria) as $msg) {
     $header = $msg->short_header();

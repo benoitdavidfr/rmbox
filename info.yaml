@@ -2,4 +2,7 @@ title: info
 contents:
   - http://localhost/rmbox/?action=get&mbox=0entrant&offset=3232652990
     En-têtes sans blanc après le ':'
-    
+doc:
+  - à noter on peut télécharger depuis Mel un ensemble de messages sous la forme d'un fichier Mbox
+    Il faut pour cela sélectionner les messages puis menu contextuel
+    puis Plus / Télécharger... / Format mbox (.zip) 

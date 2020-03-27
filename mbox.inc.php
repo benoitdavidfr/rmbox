@@ -574,8 +574,8 @@ class Message {
   // Gestion d'un bug dans le fichier des messages:
   // Lorsque le calendrier insère un message, celui-ci ne se termine pas par une ligne vide mais par une ligne boundary
   static function isStartOfMessage(string $precLine, string $line): bool {
-    return (strncmp($line, 'From - ', 7)==0)
-      && preg_match('!^From - [a-zA-Z]{3} [a-zA-Z]{3} \d\d \d\d:\d\d:\d\d \d\d\d\d$!', $line);
+    return (strncmp($line, 'From ', 5)==0)
+      && preg_match('!^From (-|[-a-zA-Z0-9\.@]+) [a-zA-Z]{3} [a-zA-Z]{3} \d\d \d\d:\d\d:\d\d \d\d\d\d$!', $line);
   }
   static function isStartOfMessage2(string $precLine, string $line): bool {
     return (strncmp($line, 'From ', 5)==0)
@@ -789,17 +789,23 @@ class Message {
         if ($this->header['Message-ID'][0] <> $cvalue)
           return false;
       }
-      else {
+      else { // les autres clés
         //echo "test match<br>\n";
-        if (!isset($this->header[$key]))
+        if (!isset($this->headers[$key]))
           return false;
-        $res = false;
-        foreach ($this->header[$key] as $hvalstr) {
-          if (preg_match("!$cvalue!", $hvalstr))
-            $res = true;
+        if (is_string($this->headers[$key])) {
+          if (!preg_match("!$cvalue!i", $this->headers[$key]))
+            return false;
         }
-        if (!$res)
-          return false;
+        else {
+          $res = false;
+          foreach ($this->headers[$key] as $hvalstr) {
+            if (preg_match("!$cvalue!i", $hvalstr))
+              $res = true;
+          }
+          if (!$res)
+            return false;
+        }
       }
     }
     return true;

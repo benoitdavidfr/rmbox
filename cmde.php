@@ -17,9 +17,10 @@ journal: |
 functions:
 */
 
-$mbox = '0entrant';
+//$mbox = '0entrant';
 //$mbox = 'Sent';
-//$mbox = 'test';
+$mbox = '../baltest';
+//$mbox = '../listes/ogc.mbox';
 
 $path = __DIR__.'/mboxes/'.$mbox;
 
@@ -46,7 +47,7 @@ if ($argc == 1) { // menu
 
 if ($argv[1] == 'list') {
   $start = $argv[2] ?? 0;
-  foreach (Message::parse($path, $start, $argv[3] ?? 10, []) as $msg) {
+  foreach (Message::parseWithIdx($path, $start, $argv[3] ?? 10, []) as $msg) {
     echo json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
   }
   die();
