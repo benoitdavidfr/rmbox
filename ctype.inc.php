@@ -36,7 +36,7 @@ abstract class CType {
   
   // indique si le Content-Type correspond ou non à un type multi-parties
   static function testIsMulti(string $cType): bool {
-    return ((strncmp($cType, 'multipart/', 10) == 0) || (strncmp($cType, 'ultipart/', 9) == 0));
+    return (strncmp($cType, 'multipart/', 10) == 0);
   }
   
   // supprime la boundary ou le name pour rendre le type plus simple et limiter le nombre de cas
@@ -48,7 +48,7 @@ abstract class CType {
     }
     else {
       if (preg_match('!^(.*)(name|name\*)="[^"]*"(.*)$!', $cType, $matches)) {
-        return "$matches[1]$matches[2]=\"xxx\"$matches[2]";
+        return "$matches[1]$matches[2]=\"xxx\"$matches[3]";
       }
       elseif (preg_match('!^(.*)(name|name\*)=[^;]*(;.*)?$!', $cType, $matches)) {
         return "$matches[1]$matches[2]=xxx".($matches[3] ?? '');
@@ -101,7 +101,7 @@ class CTypeMono extends CType {
   
   function isMulti() { return false; }
   function type() { return $this->type; }
-  function charset() { return $this->params['charset'] ?? null; }
+  function charset() { return isset($this->params['charset']) ? strToLower($this->params['charset']) : null; }
 };
 
 /*PhpDoc: classes

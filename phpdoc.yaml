@@ -15,8 +15,6 @@ doc: |
   15307
   $ grep -G '^From - ' mboxes/0entrant | wc -l
   15128
-  
-  
 
 journal: |
   25/3/2020:

@@ -30,6 +30,10 @@ doc: |
   La logique actuelle ne permet pas d'extraire une PJ d'un message en PJ d'un autre.
   Il faudrait un accès plus générique à une PJ, par exemple en définissant un chemin au sein 
 journal: |
+  27/3/2020:
+    - correction d'un bug dans Body::extractHeaders()
+    - modification de Body::extractHeaders() et de Message::__construct() pour autoriser dans l'en-tête l'utilisation
+      du séparateur ':' avec ou sans blanc après
   23/3/2020:
     - correction d'un bug dans Message::parse()
   22/3/2020:
@@ -64,13 +68,18 @@ doc: |
 methods:
 */
 abstract class Body {
+  // Corrections des headers erronés Content-type -> Content-Type utilisées dans extractHeaders()
+  const HeaderCorrections = [
+    'Content-type' => 'Content-Type',
+  ];
   protected $type; // string - le type MIME du contenu
   protected $headers=[]; // [ key -> string ] - les autres en-têtes
   protected $contents; // string - le contenu comme chaine d'octets évent. décodé en fonction de Content-Transfer-Encoding
   
   // crée un nouveau Body en fonction du type, les headers complémentaires sont utilisés pour les parties de multi-parties
   static function create(string $type, string $contents, array $headers=[]): Body {
-    if ((substr($type, 0, 15) == 'multipart/mixed') || (substr($type, 0, 14) == 'ultipart/mixed'))
+    //if ((substr($type, 0, 15) == 'multipart/mixed') || (substr($type, 0, 14) == 'ultipart/mixed'))
+    if (substr($type, 0, 15) == 'multipart/mixed')
       return new Mixed($type, $contents);
     elseif (substr($type, 0, 16) == 'multipart/report')
       return new Mixed($type, $contents);
@@ -85,35 +94,42 @@ abstract class Body {
   }
   
   // retire les headers et les renvoient séparés sous la forme [ key => value ]
-  // ERREUR sur les textes indiquant qu'il s'agit d'un format MIME
   static function extractHeaders(array &$text): array {
-    $stext = $text;
+    $stext = $text; // sauvegarde du texte en entrée avant modification
+    $htext = []; // partie du texte correspondant aux headers
+    while ($line = array_shift($text)) { // les headers s'arrêtent à la première ligne vide
+      if (!in_array(substr($line, 0, 1), ["\t", ' ']))
+        $htext[] = $line;
+      else // si le premier caractère est un blanc ou un tab alors c'est une ligne de continuation
+        $htext[count($htext)-1] .= ' '.substr($line, 1);
+    }
+    // à ce stade les headers sont extraits de $text et copiés dans $htext
+    // la ligne vide entre les en-têtes et le corps est supprimée de $text et n'est pas copiée dans $htext
+    // on construit dans un second temps le tableau des headers 
     $headers = [];
-    $key = '';
-    while ($line = array_shift($text)) { // les headers s'arrête à la première ligne vide
-      if (!in_array(substr($line, 0, 1), ["\t", ' '])) {
-        $pos = strpos($line, ': ');
-        $key = substr($line, 0, $pos);
+    foreach ($htext as $line) {
+      if (($pos = strpos($line, ':')) === FALSE) {
+        echo "clé absente dans Body::extractHeaders() sur ";
+        echo "<pre>headers="; print_r($headers);
+        echo "<pre>stext="; print_r($stext);
+        throw new Exception("clé absente dans Body::extractHeaders()");
+      }
+      $key = substr($line, 0, $pos);
+      // Correction des headers erronés Content-type -> Content-Type
+      if (isset(self::HeaderCorrections[$key]))
+        $key = self::HeaderCorrections[$key];
+      if (isset($headers[$key])) {
+        echo "Erreur d'écrasement dans Body::extractHeaders(), headers[$key] == ",$headers[$key]," && line == $line<br>\n";
+        //echo "stext="; print_r($stext);
+      }
+      // Généraement le séparateur en la clé et la valeur est ': '
+      // Mais dans certains cas on trouve ':' sans blanc
+      if (substr($line, $pos+1, 1) == ' ')
         $line = substr($line, $pos+2);
-        if (isset($headers[$key])) {
-          echo "headers[$key] == ",$headers[$key]," && line = $line<br>\n";
-          //echo "stext="; print_r($stext);
-        }
-        $headers[$key] = $line;
-      }
-      else {
-        $headers[$key] .= ' '.substr($line, 1);
-      }
-      //echo "line=$line\n"; print_r($this);
+      else
+        $line = substr($line, $pos+1);
+      $headers[$key] = @iconv_mime_decode($line);
     }
-    foreach ($headers as $key => $value)
-      $headers[$key] = @iconv_mime_decode($value);
-    // Correction des headers erronés Content-type -> Content-Type
-    if (isset($headers['Content-type'])) {
-      $headers['Content-Type'] = $headers['Content-type'];
-      unset($headers['Content-type']);
-    }
-    // Fin correction
     return $headers;
   }
   
@@ -317,19 +333,20 @@ abstract class MultiPart extends Body {
   // décompose le contenu en chacune des parties
   function parts(): array { // retourne un [ Body ]
     $text = explode("\n", $this->contents);
-    $parts = []; // [ Body ]
-    $part = []; // [ string ]
+    $parts = []; // [ Body ] - la liste des parties
+    $part = false; // [ string ] - la liste des lignes de à la partie courante, false au début pour sauter la première partie
     foreach ($text as $line) {
       if (strpos($line, $this->boundary()) !== FALSE) {
-        $parts[] = Body::createFromPart($part);
+        if ($part !== false)
+          $parts[] = Body::createFromPart($part);
         $part = [];
       }
       else {
-        $part[] = $line;
+        if ($part !== false)
+          $part[] = $line;
       }
     }
     //$parts[] = Body::createFromPart($part); // La dernière partie semble systématiquement vide
-    array_shift($parts); // La première partie est vide ou inutile
     //echo "<pre>parts="; print_r($parts); echo "</pre>\n";
     return $parts;
   }
@@ -485,7 +502,7 @@ methods:
 */
 class Message {
   // Corrections de la clé identifiant les headers d'un message
-  static $headerCorrections = [
+  const HeaderCorrections = [
     'Content-type' => 'Content-Type',
     'CC' => 'Cc',
   ];
@@ -688,39 +705,43 @@ class Message {
   */
   function __construct(array $txt, int $offset=-1, bool $onlyHeaders=false) {
     //echo "<pre>Message::__construct()<br>\n";
+    $stext = $txt; // sauvegarde de $txt
     $this->offset = $offset;
     //foreach ($txt as $line) echo "$line\n";
     $this->header[''] = [ array_shift($txt) ]; // Traitement de la première ligne d'en-tete
-    $key = '';
+    $htext = []; // premières lignes correspondant aux headers
     while ($line = array_shift($txt)) { // le header s'arrête à la première ligne vide
-      if (in_array(substr($line, 0, 1), ["\t", ' '])) {
-        $this->header[$key][count($this->header[$key])-1] .= ' '.substr($line, 1);
+      if (in_array(substr($line, 0, 1), ["\t", ' '])) // c'est une ligne suite
+        $htext[count($htext)-1] .= ' '.substr($line, 1);
+      else
+        $htext[] = $line;
+    }
+    // à ce stade les headers sont extraits de $txt et copiés dans $htext
+    // la ligne vide entre les en-têtes et le corps est supprimée de $txt et n'est pas copiée dans $htext
+    // on construit dans un second temps le tableau des headers 
+    foreach ($htext as $line) {
+      if (($pos = strpos($line, ':')) === FALSE) {
+        echo "clé absente dans Message::__construct() sur ";
+        echo "<pre>headers="; print_r($headers);
+        echo "<pre>stext="; print_r($stext);
+        throw new Exception("clé absente dans Body::extractHeaders()");
       }
-      else {
-        $pos = strpos($line, ':');
-        $key = substr($line, 0, $pos);
+      $key = substr($line, 0, $pos);
+      // Correction des headers erronés Content-type -> Content-Type, ...
+      if (isset(self::HeaderCorrections[$key]))
+        $key = self::HeaderCorrections[$key];
+      // Généralement le séparateur est la valeur est ': '
+      // Mais dans certains cas on trouve ':' sans blanc
+      if (substr($line, $pos+1, 1) == ' ')
         $line = substr($line, $pos+2);
-        if (!isset($this->header[$key]))
-          $this->header[$key] = [ $line ];
-        else
-          $this->header[$key][] = $line;
-      }
-      //echo "line=$line\n"; print_r($this);
+      else
+        $line = substr($line, $pos+1);
+      $line = @iconv_mime_decode($line);
+      if (!isset($this->header[$key]))
+        $this->header[$key] = [ $line ];
+      else
+        $this->header[$key][] = $line;
     }
-    foreach ($this->header as $key => $values) {
-      foreach ($values as $i => $atom) {
-        //echo "atom=",htmlentities($atom),"<br>\n";
-        $this->header[$key][$i] = @iconv_mime_decode($atom);
-      }
-    }
-    // Correction des headers erronés Content-type -> Content-Type, ..
-    foreach(self::$headerCorrections as $bad => $corrected) {
-      if (isset($this->header[$bad])) {
-        $this->header[$corrected] = $this->header[$bad];
-        unset($this->header[$bad]);
-      }
-    }
-    // Fin correction
     $this->body = $onlyHeaders ? null : implode("\n", $txt);
     //echo "Fin Message::__construct() "; print_r($this); echo "</pre>\n";
   }

@@ -38,7 +38,8 @@ if ($argc == 1) { // menu
   echo "  - mboxes : liste des boites aux lettres\n";
   echo "  - buildIdx : fabrique un index pour la Bal $mbox\n";
   echo "  - parseWithIdx [{start} [{max}]] : liste les en-têtes avec parseWithIdx()\n";
-  echo "  - listContentType [{start} [{max}]] : liste les Content-Type\n";
+  echo "  - listContentTypes : liste les Content-Type à partir de fichier Mbox\n";
+  echo "  - findSimplContentType {simplContentType} : retrouve les Content-Type détaillés à partir du simplifié\n";
   echo "  - parseContentTypes : analyse les Content-Type\n";
   die();
 }
@@ -192,51 +193,32 @@ if ($argv[1] == 'parseWithIdx') { // Test parseWithIdx
 }*/
 
 // balayage recursif des parties pour y récupérer les ctypes
-function listOfContentTypes(&$fout, array &$contentTypes, Body $body) {
+function listOfContentTypes(&$fout, Body $body) {
   foreach ($body->parts() as $part) {
-    $contentType = CType::simplified($part->type());
-    fwrite($fout, "$contentType\n");
-    if (!isset($contentTypes[$contentType]))
-      $contentTypes[$contentType] = 1;
-    else
-      $contentTypes[$contentType]++;
+    fwrite($fout, $part->type()."\n");
     if ($part->isMulti())
-      listOfContentTypes($fout, $contentTypes, $part);
+      listOfContentTypes($fout, $part);
   }
 }
 
-// liste les Content-Type et crée le fichier contentTypes.txt des libellés simplifiés
-// N'entre pas dans l'analyse détaillé du Content-Type pour éviter les bloquages
-// Les en-têtes simplifiées sont stockées dans simplContentTypes.txt et celles détaillées dans detailContentTypes.txt
-if ($argv[1] == 'listContentType') {
+// liste les Content-Type et crée le fichier contentTypes.txt des libellés
+if ($argv[1] == 'listContentTypes') {
   require_once 'ctype.inc.php';
 
   $start = $argv[2] ?? 0;
-  $fout = fopen('detailContentTypes.txt', 'w');
-  $contentTypes = [];
+  $fout = fopen('contentTypes.txt', 'w');
   foreach (Message::parse($path, $start, $argv[3] ?? 99999, []) as $msg) {
+    echo "Message offset=",$msg->short_header()['offset'],"\n";
     $contentType = $msg->short_header()['Content-Type'] ?? '';
     fwrite($fout, "$contentType\n");
-    $contentType = CType::simplified($contentType);
-    //echo "Content-Type=$contentType\n";
-    if (!isset($contentTypes[$contentType]))
-      $contentTypes[$contentType] = 1;
-    else
-      $contentTypes[$contentType]++;
     if (1 && CType::testIsMulti($contentType)) { // balaie récursivement les parties pour récupérer les ctypes
       //echo "Content-Type=$contentType\n";
       $body = Message::get($path, $msg->short_header()['offset'])->body();
       //echo "treeOfContentTypes:\n";
       //treeOfContentTypes($contentType, $body)->show();
       //treeOfContentTypes($contentType, $body);
-      listOfContentTypes($fout, $contentTypes, $body);
+      listOfContentTypes($fout, $body);
     }
-  }
-  fclose($fout);
-  $fout = fopen('simplContentTypes.txt', 'w');
-  foreach ($contentTypes as $contentType => $nbre) {
-    echo "contentType=$contentType -> $nbre\n";
-    fwrite($fout, "$contentType\t$nbre\n");
   }
   fclose($fout);
   die();
@@ -246,23 +228,23 @@ if ($argv[1] == 'listContentType') {
 if ($argv[1] == 'parseContentTypes') {
   require_once 'ctype.inc.php';
   
-  $fin = fopen('contentTypes.txt', 'r');
+  if (!($fin = fopen('contentTypes.txt', 'r')))
+    die("Erreur d'ouverture du fichier contentTypes.txt\n");
   $types = [];
   $charsets = [];
   $subtypes = [];
-  while ($buff = fgets($fin)) {
-    $buff = rtrim($buff);
-    list($contentType, $nbre) = explode("\t", $buff);
-    echo "contentType=$contentType -> $nbre\n";
+  while ($contentType = fgets($fin)) {
+    $contentType = rtrim($contentType);
+    //echo "contentType=$contentType -> $nbre\n";
     $cType = CType::create($contentType);
-    if ($cType->isMono()) {
+    if (!$cType->isMulti()) {
       if (!in_array($cType->type(), $types))
         $types[] = $cType->type();
       if (!in_array($cType->charset(), $charsets))
         $charsets[] = $cType->charset();
     }
     else {
-      echo "subtype=",$cType->subtype(),"\n";
+      //echo "subtype=",$cType->subtype(),"\n";
       if (!in_array($cType->subtype(), $subtypes))
         $subtypes[] = $cType->subtype();
     }
