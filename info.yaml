@@ -9,3 +9,5 @@ doc:
 bugs:
   - title: boundary définie 2 fois dans l'en-tête et en consqéquence mal traitée ensuite
     ref: http://localhost/rmbox/?action=get&mbox=0entrant&offset=3022287431
+  - title: noms de pièce jointe avec accents mal décodé
+    ref: http://localhost/rmbox/?action=get&mbox=0entrant&offset=3554317573

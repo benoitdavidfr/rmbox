@@ -234,7 +234,7 @@ if ($_GET['action'] == 'sortEmail') { // tri les adresses par nom de domaine et 
 
 if ($_GET['action'] == 'dlAttached') { // téléchargement d'une pièce jointe d'un message
   $msg = Message::get(__DIR__.'/mboxes/'.$_GET['mbox'], $_GET['offset']);
-  $msg->dlAttached($_GET['name'], isset($_GET['debug']));
+  $msg->dlAttached(explode('/', $_GET['path']), isset($_GET['debug']));
   die();
 }
 

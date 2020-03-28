@@ -16,6 +16,9 @@ doc: |
 journal: |
   28/3/2020:
     - création du fichier à partir de mbox.inc.php
+    - modification de Body::extractHeaders() pour mieux gérer les erreurs d'unicité de header
+    - modification de MonPart::asHtml() pour mieux gérer certains cas
+    - modif principe d'adressage d'une PJ
 functions:
 classes:
 */
@@ -52,22 +55,23 @@ abstract class Body {
   protected $type; // string - le type MIME du contenu
   protected $headers=[]; // [ key -> (string | [ string ]) ] - les autres en-têtes
   protected $contents; // string - le contenu comme chaine d'octets évent. décodé en fonction de Content-Transfer-Encoding
+  protected $path; // chemin d'accès à partir du message stocké dans le fichier Mbox
   
-  // crée un nouveau Body en fonction du type, les headers complémentaires sont utilisés pour les parties de multi-parties
-  static function create(string $type, string $contents, array $headers=[]): Body {
+  // crée un nouveau Body avec choix de la classe en fonction du type
+  static function create(string $type, string $contents, array $headers, $path): Body {
     //if ((substr($type, 0, 15) == 'multipart/mixed') || (substr($type, 0, 14) == 'ultipart/mixed'))
     if (substr($type, 0, 15) == 'multipart/mixed')
-      return new Mixed($type, $contents);
+      return new Mixed($type, $contents, $headers, $path);
     elseif (substr($type, 0, 16) == 'multipart/report')
-      return new Mixed($type, $contents);
+      return new Mixed($type, $contents, $headers, $path);
     elseif (substr($type, 0, 21) == 'multipart/alternative')
-      return new Alternative($type, $contents);
+      return new Alternative($type, $contents, $headers, $path);
     elseif (substr($type, 0, 17) == 'multipart/related')
-      return new Related($type, $contents);
+      return new Related($type, $contents, $headers, $path);
     elseif ($type == 'message/rfc822')
-      return new MessageRFC822($type, $contents);
+      return new MessageRFC822($type, $contents, $headers, $path);
     else
-      return new MonoPart($type, $contents);
+      return new MonoPart($type, $contents, $headers, $path);
   }
   
   // retire les headers et les renvoient séparés sous la forme [ key => (string | [ string ]) ] 
@@ -97,8 +101,10 @@ abstract class Body {
       $key = substr($line, 0, $pos);
       
       // Correction des clés de header erronées Content-type -> Content-Type
-      if (isset(self::HeaderCorrections[$key]))
+      if (isset(self::HeaderCorrections[$key])) {
+        //echo "Correction de $key en ",self::HeaderCorrections[$key],"<br>\n";
         $key = self::HeaderCorrections[$key];
+      }
       
       // Normalement le séparateur de la clé est la chaine est ': '
       // Mais dans certains cas on trouve ':' sans blanc, ex: http://localhost/rmbox/?action=get&mbox=0entrant&offset=3232652990
@@ -106,29 +112,33 @@ abstract class Body {
         $line = substr($line, $pos+2);
       else
         $line = substr($line, $pos+1);
+      if (($decodedVal = @iconv_mime_decode($line)) === FALSE)
+        $decodedVal = $line;
+      //echo "decodedVal=$decodedVal<br>\n";
       
       // stockage du header dans la variable headers
       if (!isset($headers[$key]))
-        $headers[$key] = @iconv_mime_decode($line); // la première valeur est stockée directement
-      elseif (in_array($key, self::SimpleHeaderKeys)) { // si la clé appartient à SimpleHeaderKeys alors écrasement avec alerte
-        echo "Erreur d'écrasement dans Body::extractHeaders(), headers[$key] == ",$headers[$key]," && line == $line<br>\n";
-        $headers[$key] = @iconv_mime_decode($line);
+        $headers[$key] = $decodedVal; // la première valeur est stockée directement
+      elseif (in_array($key, self::SimpleHeaderKeys)) { // si la clé appartient à SimpleHeaderKeys
+        $nheader = $decodedVal;
+        if ($nheader <> $headers[$key]) // si les 2 valeurs sont distinctes alors alerte et conservation de la première
+          echo "Erreur d'unicité dans Body::extractHeaders() pour headers[$key] == ",$headers[$key]," && line == $nheader<br>\n";
       }
       elseif (is_string($headers[$key])) // Si elle n'y appartient pas alors stockage dans un array
-        $headers[$key] = [$headers[$key], $line]; // pour la seconde création de l'array
+        $headers[$key] = [$headers[$key], $decodedVal]; // pour la seconde création de l'array
       else
-        $headers[$key][] = $line; // à partir de la 3ème ajout dans l'array
+        $headers[$key][] = $decodedVal; // à partir de la 3ème ajout dans l'array
     }
     //echo "<pre>Body::extractHeaders() returns: "; print_r($headers); echo "</pre>\n";
     return $headers;
   }
   
-  // construit un body défini par un texte passé sous la forme d'une liste de chaines qui commence par une liste de headers
+  /*// crée un body défini par un texte passé sous la forme d'une liste de chaines qui commence par une liste de headers
   static function createFromPart(array $text): Body {
     //echo "<pre>Body::newFromPart(text="; print_r($text); echo ")</pre>\n";
     if (!$text) {
       //echo "<b>return</b> empty Body<br>\n";
-      return new MonoPart('', '');
+      return new MonoPart('', '', []);
     }
     $headers = Body::extractHeaders($text);
     $type = $headers['Content-Type'] ?? '';
@@ -144,14 +154,15 @@ abstract class Body {
       //echo "<b>return</b> MonoPart()<br>\n";
       return new MonoPart($type, implode("\n", $text), $headers);
     }
-  }
+  }*/
   
-  // recopie les 3 paramètres dans les champs de l'objet
-  function __construct(string $type, string $contents, array $headers=[]) {
+  // recopie les 4 paramètres dans les champs de l'objet
+  function __construct(string $type, string $contents, array $headers, $path) {
     //echo "Body::__construct(type=$type, contents, headers)<br>\n";
     $this->type = $type;
     $this->contents = $contents;
     $this->headers = $headers;
+    $this->path = $path;
   }
 
   function type() { return $this->type; }
@@ -166,26 +177,6 @@ abstract class Body {
   abstract function name(): ?string;
 };
 
-/*PhpDoc: functions
-name: MonoPart
-title: "function decodeContents(string $ctEncoding, string $contents): string - decode un contenu en fonction du header Content-Transfer-Encoding"
-doc: |
-*/
-function decodeContents(string $ctEncoding, string $contents): string {
-  switch (strToLower($ctEncoding)) {
-    case '':
-    case '8bit':
-    case '7bit':
-      return $contents;
-    case 'base64':
-      return base64_decode($contents);
-    case 'quoted-printable':
-      return quoted_printable_decode($contents);
-    default:
-      throw new Exception("Content-Transfer-Encoding == '$ctEncoding' inconnu");
-  }
-}
-
 /*PhpDoc: classes
 name: MonoPart
 title: class MonoPart extends Body - Partie atomique
@@ -196,6 +187,7 @@ class MonoPart extends Body {
   // liste des formats reconnus pour les fichiers attachés, utilisé dans un preg_match()
   static $attachFormats = [
     'application/octet-stream',
+    'application/octet-steam', // bug rencontré http://localhost/rmbox/?action=get&mbox=0entrant&offset=3554317573
     'application/pdf',
     'application/msword',
     'application/vnd\.oasis\.opendocument\.text',
@@ -207,13 +199,28 @@ class MonoPart extends Body {
   // retourne le contenu décodé en fonction du header Content-Transfer-Encoding
   function decodedContents(): string {
     //echo "<pre>this="; print_r($this); echo "</pre>\n";
-    return decodeContents($this->headers['Content-Transfer-Encoding'] ?? '', $this->contents);
+    $ctEncoding = $this->headers['Content-Transfer-Encoding'] ?? '';
+    switch (strToLower($ctEncoding)) {
+      case '':
+      case '8bit':
+      case '7bit':
+        return $this->contents;
+      case 'base64':
+        return base64_decode($this->contents);
+      case 'quoted-printable':
+        return quoted_printable_decode($this->contents);
+      default:
+        throw new Exception("Content-Transfer-Encoding == '$ctEncoding' inconnu");
+    }
   }
   
   // retourne le code Html d'affichage de l'objet
   function asHtml(bool $debug): string {
     if ($debug) {
-      $html = "<table border=1>\n";
+      $html = "<b>MonoPart::asHtml()</b>path=".implode('/', $this->path)."<br>\n";
+      $html .= "<table border=1>\n";
+      //foreach ($this->headers as $key => $value)
+        //$html .= "<tr><td>H:$key</td><td>$value</td></tr>\n";
       $html .= '<tr><td>Content-Type</td><td>'.$this->type."</td></tr>\n";
       foreach ($this->headers as $key => $value)
         $html .= "<tr><td>$key</td><td>".htmlentities($value)."</td></tr>\n";
@@ -255,11 +262,12 @@ class MonoPart extends Body {
         return "Warning: dans MonoPart::asHtml() Content-Transfer-Encoding == '$ctEncoding' inconnu\n";
       }
     }
-    elseif (preg_match('!^('.implode('|', self::$attachFormats).'); name="([^"]+)"$!', $this->type, $matches)) {
+    elseif (preg_match('!^('.implode('|', self::$attachFormats).'); name=("([^"]+)"|[^;]+)!', $this->type, $matches)) {
+      $name = $matches[3] ?? $matches[2];
       return "<a href='?action=dlAttached&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]"
         .(isset($_GET['debug']) ? "&amp;debug=true" : '')
-        ."&amp;name=".urlencode($matches[2])."'>"
-        ."Attachment type $matches[1], name=\"$matches[2]\"</a>\n";
+        ."&amp;path=".implode('/', $this->path)."'>"
+        ."Attachment type $matches[1], name=\"$name\"</a>\n";
     }
     elseif (preg_match('!^text/calendar!', $this->type)) {
       return '<pre><i>Content-Type: '.$this->type."</i>\n".htmlentities($this->decodedContents()).'</pre>';
@@ -320,21 +328,29 @@ abstract class MultiPart extends Body {
       throw new Exception("MultiPart::boundary() impossible sur type='".$this->type."'");
   }
   
-  // décompose le contenu en chacune des parties
+  // décompose le contenu de la MultiPart en chacune des parties
   function parts(): array { // retourne un [ Body ]
     $text = explode("\n", $this->contents);
     $parts = []; // [ Body ] - la liste des parties
-    $part = false; // [ string ] - la liste des lignes de à la partie courante, false au début pour sauter la première partie
+    $part = false; // [ string ] - la liste des lignes de la partie courante, false au début pour sauter la partie avant la limite
+    $partno = 0;
     foreach ($text as $line) {
       if (strpos($line, $this->boundary()) !== FALSE) {
-        if ($part !== false)
-          $parts[] = Body::createFromPart($part);
+        if ($part !== false) {
+          if (!$part) {
+            $parts[] = new MonoPart('', '', []);
+          }
+          else {
+            $headers = Body::extractHeaders($part);
+            $type = $headers['Content-Type'] ?? '';
+            unset($headers['Content-Type']);
+            $parts[] = Body::create($type, implode("\n", $part), $headers, array_merge($this->path, [$partno++]));
+          }
+        }
         $part = [];
       }
-      else {
-        if ($part !== false)
-          $part[] = $line;
-      }
+      elseif ($part !== false)
+        $part[] = $line;
     }
     //$parts[] = Body::createFromPart($part); // La dernière partie semble systématiquement vide
     //echo "<pre>parts="; print_r($parts); echo "</pre>\n";
@@ -375,12 +391,10 @@ class Mixed extends MultiPart {
     return $html;
   }
   
-  function dlAttached(string $name, bool $debug) {
-    //echo "Mixed::dlAttached($name)<br>\n";
-    foreach ($this->parts() as $part) {
-      if ($part->name() == $name)
-        $part->download($debug);
-    }
+  function dlAttached(array $path, bool $debug) {
+    //echo "Mixed::dlAttached(",implode('/', $path),")<br>\n";
+    $nopart = array_shift($path);
+    $this->parts()[$nopart]->download($debug);
   }
 };
 
@@ -393,7 +407,7 @@ methods:
 class Alternative extends MultiPart {
   function asHtml(bool $debug): string {
     if ($debug) {
-      $html = "Alternative::asHtml()<br>\n";
+      $html = "<b>Alternative::asHtml()</b>path=".implode('/', $this->path)."<br>\n";
       $html .= "<table border=1>\n";
       foreach ($this->parts() as $part) {
         $html .= "<tr><td>".$part->asHtml($debug)."</td></tr>\n";

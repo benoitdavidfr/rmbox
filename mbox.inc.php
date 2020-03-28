@@ -22,12 +22,12 @@ doc: |
   related  ::= text/html + inlineimage+
   inlineimage ::= content-type + Content-ID + contents
 
-  La logique actuelle ne permet pas d'extraire une PJ d'un message en PJ d'un autre.
-  Il faudrait un accès plus générique à une PJ, par exemple en définissant un chemin au sein d'un message.
 journal: |
   28/3/2020:
     - correction d'un bug dans Message::body()
     - décomposition du fichier en mbox.inc.php et body.inc.php
+    - correction de Message::body() afin que le décodage soit fait dans Body
+    - modif principe d'adressage d'une PJ
   27/3/2020:
     - correction d'un bug dans Body::extractHeaders()
     - modification de Body::extractHeaders() et de Message::__construct() pour autoriser dans l'en-tête l'utilisation
@@ -283,12 +283,14 @@ class Message {
   doc: |
   */
   function body(): Body {
-    $ctype = $this->headers['Content-Type'] ?? '';
-    $contents = $this->body;
-    // Je n'effectue le décodage que pour les messages mono-part
-    if (isset($this->headers['Content-Transfer-Encoding']) && (substr($ctype,0,10) <> 'multipart/'))
-      $contents = decodeContents($this->headers['Content-Transfer-Encoding'], $contents);
-    return Body::create($ctype, $contents);
+    return Body::create(
+      $this->headers['Content-Type'] ?? '',
+      $this->body,
+      isset($this->headers['Content-Transfer-Encoding']) ?
+        ['Content-Transfer-Encoding' => $this->headers['Content-Transfer-Encoding']] :
+        [],
+      []
+    );
   }
   
   /*PhpDoc: methods
@@ -389,7 +391,7 @@ class Message {
   }
   
   // télécharge une pièce jointe
-  function dlAttached(string $name, bool $debug) { $this->body()->dlAttached($name, $debug); }
+  function dlAttached(array $path, bool $debug) { $this->body()->dlAttached($path, $debug); }
 }
 
 
