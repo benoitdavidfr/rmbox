@@ -48,7 +48,7 @@ if ($argc == 1) { // menu
 if ($argv[1] == 'list') {
   $start = $argv[2] ?? 0;
   foreach (Message::parseWithIdx($path, $start, $argv[3] ?? 10, []) as $msg) {
-    echo json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
+    echo json_encode($msg->short_headers(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
   }
   die();
 }
@@ -58,7 +58,7 @@ if ($argv[1] == 'listOffset') {
     die("Erreur paramètre obligatoire\n");
   $offset = $argv[2];
   foreach (Message::parseUsingOffset($path, $offset, $argv[3] ?? 10, []) as $msg) {
-    echo json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
+    echo json_encode($msg->short_headers(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
   }
   echo "offset=$offset\n";
   die();
@@ -68,7 +68,7 @@ if ($argv[1] == 'get') { // lit le message commencant à l'offset {offset}
   if ($argc < 3)
     die("Erreur paramètre offset obligatoire\n");
   $msg = Message::get($path, $argv[2]);
-  echo json_encode(['header'=> $msg->short_header(), 'body'=> $msg->body()],
+  echo json_encode(['header'=> $msg->short_headers(), 'body'=> $msg->body()],
     JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
   die();
 }
@@ -77,7 +77,7 @@ if ($argv[1] == 'getById') { // lit le message identifié par {Message-ID}
   if ($argc < 3)
     die("Erreur paramètre Message-ID obligatoire\n");
   $msgs = Message::parse($path, 0, 1, ['Message-ID'=> "<$argv[2]>"]);
-  echo json_encode(['header'=> $msgs[0]->short_header(), 'body'=> $msgs[0]->body()],
+  echo json_encode(['header'=> $msgs[0]->short_headers(), 'body'=> $msgs[0]->body()],
     JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
   die();
 }
@@ -146,7 +146,7 @@ if ($argv[1] == 'buildIdx') { // fabrique un index pour la Bal $mbox
     die("Erreur d'ouverture de mbox $path.idx");
   $start = 0;
   foreach (Message::parse($path, $start, 999999, []) as $msg) {
-    //echo json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
+    //echo json_encode($msg->short_headers(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
     fprintf($idxfile, "%20d\n", $msg->offset());
   }
   echo "Index construit pour $mbox\n";
@@ -156,7 +156,7 @@ if ($argv[1] == 'buildIdx') { // fabrique un index pour la Bal $mbox
 if ($argv[1] == 'parseWithIdx') { // Test parseWithIdx
   $start = $argv[2] ?? 0;
   foreach (Message::parseWithIdx($path, $start, $argv[3] ?? 10, []) as $msg) {
-    echo json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
+    echo json_encode($msg->short_headers(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
   }
   die();
 }
@@ -177,12 +177,12 @@ if ($argv[1] == 'listContentTypes') {
   $start = $argv[2] ?? 0;
   $fout = fopen('contentTypes.txt', 'w');
   foreach (Message::parse($path, $start, $argv[3] ?? 99999, []) as $msg) {
-    echo "Message offset=",$msg->short_header()['offset'],"\n";
-    $contentType = $msg->short_header()['Content-Type'] ?? '';
+    echo "Message offset=",$msg->short_headers()['offset'],"\n";
+    $contentType = $msg->short_headers()['Content-Type'] ?? '';
     fwrite($fout, "$contentType\n");
     if (1 && CType::testIsMulti($contentType)) { // balaie récursivement les parties pour récupérer les ctypes
       //echo "Content-Type=$contentType\n";
-      $body = Message::get($path, $msg->short_header()['offset'])->body();
+      $body = Message::get($path, $msg->short_headers()['offset'])->body();
       //echo "treeOfContentTypes:\n";
       //treeOfContentTypes($contentType, $body)->show();
       //treeOfContentTypes($contentType, $body);
@@ -309,18 +309,18 @@ if ($argv[1] == 'listStruct') {
     die("Erreur d'ouverture du fichier struct.txt\n");
   $start = 0;
   foreach (Message::parse($path, $start, 99999, []) as $msg) {
-    //echo "Message offset=",$msg->short_header()['offset'],"\n";
-    $contentType = $msg->short_header()['Content-Type'] ?? '';
+    //echo "Message offset=",$msg->short_headers()['offset'],"\n";
+    $contentType = $msg->short_headers()['Content-Type'] ?? '';
     if (CType::testIsMulti($contentType)) { // balaie récursivement les parties pour récupérer les ctypes
       //echo "Content-Type=$contentType\n";
-      $body = Message::get($path, $msg->short_header()['offset'])->body();
+      $body = Message::get($path, $msg->short_headers()['offset'])->body();
       //echo "treeOfContentTypes:\n";
       //treeOfContentTypes(simplType($contentType), $body)->show();
       $json = json_encode(treeOfContentTypes(simplType($contentType), $body)->asArray());
       do {
         $json = preg_replace('!"image","image\+?"]!', '"image+"]', $json, -1, $count);
       } while ($count <> 0);
-      fprintf($fstruct, "%s\t%d\n", str_replace('"', '', $json), $msg->short_header()['offset']);
+      fprintf($fstruct, "%s\t%d\n", str_replace('"', '', $json), $msg->short_headers()['offset']);
       echo str_replace('"', '', $json),"\n";
     }
   }

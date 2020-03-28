@@ -31,9 +31,9 @@ if (1) { // nbre de mails recus depuis l'adresse
   $emails = []; // [ email => count ]
   $start = 0;
   foreach (Message::parse($path, $start, 999999, []) as $msg) {
-    $headers = $msg->short_header();
+    $headers = $msg->short_headers();
     if (!isset($headers['From'])) {
-      //echo json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
+      //echo json_encode($msg->short_headers(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
       continue;
     }
     $email = strToLower(Message::cleanEmail($headers['From']));
@@ -107,9 +107,9 @@ if (1) { // nbre de mails envoyés à l'adresse
   $start = 0;
   //foreach (Message::parse($path, $start, 999999, []) as $msg) {
   foreach (Message::parse($path, $start, 999999, []) as $msg) {
-    $headers = $msg->short_header();
+    $headers = $msg->short_headers();
     if (!isset($headers['To'])) {
-      //echo json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
+      //echo json_encode($msg->short_headers(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n\n";
       continue;
     }
     $recipients = $headers['To'].(isset($headers['Cc']) ? ','.$headers['Cc'] : '');

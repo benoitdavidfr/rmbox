@@ -17,8 +17,8 @@ doc: |
   15128
 
   Le code pourrait être amélioré:
-    - en utilisant les fonctions de ctype dans mbox
-    - en vérifiant que les cas recensés dans la commande parseContentTypes sont traités dans mbox
+    - en utilisant les fonctions de ctype dans mbox et body
+    - en vérifiant que les cas recensés dans la commande parseContentTypes sont traités dans mbox et body
 journal: |
   28/3/2020:
     - dissociation mbox.inc.php en 2 fichiers mbox.inc.php + body.inc.php

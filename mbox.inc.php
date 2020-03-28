@@ -3,10 +3,10 @@
 name: mbox.inc.php
 title: mbox.inc.php - définition de classes pour gérer les messages d'un fichier Mbox
 doc: |
-  La classe Message gère un message ainsi que les fonctions d'analyse d'un ficher Mbox pour en extraire un ou plusieurs messages.
+  La classe Message gère un message et définit les fonctions d'analyse d'un ficher Mbox pour en extraire un ou plusieurs messages.
   Un message est composé d'en-têtes et d'un corps.
   Ce corps est géré par la classe abstraite Body qui peut être utilisée récursivement. Voir body.inc.php
-  La classe Index gère l'index au sein d'un fichier Mbox.
+  La classe Index gère l'index des messages au sein d'un fichier Mbox.
 
   message ::= header+ + body
   header ::= content-type | Content-Transfer-Encoding | ...
@@ -322,12 +322,12 @@ class Message {
   }
   
   /*PhpDoc: methods
-  name: short_header
-  title: "function short_header(): array - retourne un en-tête restreint sous la forme [key -> string]"
+  name: short_headers
+  title: "function short_headers(): array - retourne un en-tête restreint sous la forme [key -> string]"
   doc: |
     On utilise la liste des keys pour lesquelles headers contient forcément un string et pas un [ string ]
   */
-  function short_header(): array {
+  function short_headers(): array {
     $short = [];
     foreach (Body::SimpleHeaderKeys as $key) {
       if (isset($this->headers[$key]))
@@ -341,11 +341,11 @@ class Message {
   title: "function asArray(): array - retourne le message comme un array exportable en JSON"
   doc: |
   */
-  function asArray(): array { return ['header'=> $this->short_header(), 'body'=> $this->body]; }
+  function asArray(): array { return ['header'=> $this->short_headers(), 'body'=> $this->body]; }
   
   function asHtml(bool $debug): string {
     $html = "<table border=1>\n";
-    foreach ($this->short_header() as $key => $value) {
+    foreach ($this->short_headers() as $key => $value) {
       $html .= "<tr><td>$key</td><td>$value</td></tr>\n";
     }
     $html .= "<tr><td>body</td><td>".$this->body()->asHtml($debug)."</td></tr>\n";

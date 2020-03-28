@@ -3,7 +3,7 @@
 name: ctype.inc.php
 title: ctype.inc.php - analyse du Content-Type
 doc: |
-  L'objectif est de concentrer dans la classe CType et ses ous-classes le code d'analyse des Content-Type,
+  L'objectif est de concentrer dans la classe CType et ses sous-classes le code d'analyse des Content-Type,
   aussi bien celui des messages que celui des parties de messages.
   Cela permet d'éviter de répartir cette analyse dans le code et de facilite sa fiabilisation.
   Ces lignes de texte sont assez variables.

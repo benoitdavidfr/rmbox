@@ -1,7 +1,7 @@
 <?php
 /*PhpDoc:
 name: body.inc.php
-title: body.inc.php - définition de la classe Body et de ses sous-classes pour gérer les corps des messages d'un fichier Mbox
+title: body.inc.php - définition de la classe Body et de ses sous-classes pour gérer le corps d'un message d'un fichier Mbox
 doc: |
   La classe Message gère un message ainsi que les fonctions d'analyse d'un ficher Mbox pour en extraire un ou plusieurs messages.
   Un message est composé d'en-têtes et d'un corps.
@@ -78,6 +78,7 @@ abstract class Body {
   // si la clé du header appartient à SimpleHeaderKeys alors la forme est [ key => string ]
   // Cette fonction est utilisée à la fois par Body::createFromPart() et Message::__construct()
   static function extractHeaders(array &$text): array {
+    //echo "Body::extractHeaders()<br>\n";
     $stext = $text; // sauvegarde du texte en entrée avant modification
     $htext = []; // partie du texte correspondant aux headers
     while ($line = array_shift($text)) { // les headers s'arrêtent à la première ligne vide

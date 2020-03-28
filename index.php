@@ -77,14 +77,14 @@ if (!isset($_GET['action'])) { // par défaut liste les messages
     if (isset($_GET[$key]) && $_GET[$key])
       $criteria[$key] = $_GET[$key];
   foreach (Message::parseWithIdx(__DIR__.'/mboxes/'.$mbox, $start, $max, $criteria) as $msg) {
-    $header = $msg->short_header();
+    $headers = $msg->short_headers();
     echo "<tr>";
     echo "<td><a href='?action=get&amp;mbox=$mbox&amp;offset=",$msg->offset(),"'>M</a></td>";
-    echo "<td>",htmlentities(mb_substr($header['From'], 0, 40)),"</td>";
-    echo "<td>",htmlentities(mb_substr($header['To'], 0, 40)),"</td>";
-    echo "<td>",htmlentities($header['Date']),"</td>";
-    echo "<td>",htmlentities($header['Subject']),"</td>";
-    //echo "<td><pre>",json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"</pre></td>";
+    echo "<td>",htmlentities(mb_substr($headers['From'], 0, 40)),"</td>";
+    echo "<td>",htmlentities(mb_substr($headers['To'], 0, 40)),"</td>";
+    echo "<td>",htmlentities($headers['Date']),"</td>";
+    echo "<td>",htmlentities($headers['Subject']),"</td>";
+    //echo "<td><pre>",json_encode($msg->short_headers(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"</pre></td>";
     echo "</tr>\n";
   }
   echo "</table>\n";
@@ -153,20 +153,21 @@ if ($_GET['action'] == 'get') { // affiche un message donné défini par son off
   echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>get $_GET[mbox] $_GET[offset]</title></head><body>\n";
   $msg = Message::get(__DIR__.'/mboxes/'.$_GET['mbox'], $_GET['offset']);
   echo "<table border=1>\n";
-  $header = $msg->short_header();
-  echo "<tr><td>Date</td><td>",htmlentities($header['Date']),"</td></tr>\n";
-  echo "<tr><td>From</td><td>",htmlentities($header['From']),"</td></tr>\n";
+  $headers = $msg->short_headers();
+  echo "<tr><td>Date</td><td>",htmlentities($headers['Date']),"</td></tr>\n";
+  echo "<tr><td>From</td><td>",htmlentities($headers['From']),"</td></tr>\n";
   //echo "<tr><td><a href='?action=sortEmail&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]'>To</a></td>",
-  //     "<td>",htmlentities($header['To']),"</td></tr>\n";
-  echo "<tr><td><a href='?action=sortEmail&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]&amp;header=To'>To</a></td>",
-       "<td>",showRecipients($header['To']),"</td></tr>\n";
-  if (isset($header['Cc']))
+  //     "<td>",htmlentities($headers['To']),"</td></tr>\n";
+  if (isset($headers['To']))
+    echo "<tr><td><a href='?action=sortEmail&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]&amp;header=To'>To</a></td>",
+         "<td>",showRecipients($headers['To']),"</td></tr>\n";
+  if (isset($headers['Cc']))
     echo "<tr><td><a href='?action=sortEmail&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]&amp;header=Cc'>Cc</a></td>",
-         "<td>",showRecipients($header['Cc']),"</td></tr>\n";
-  echo "<tr><td>Subject</td><td>",htmlentities($header['Subject']),"</td></tr>\n";
-  echo "<tr><td>Content-Type</td><td>",htmlentities($header['Content-Type'] ?? 'Non défini'),"</td></tr>\n";
-  if (isset($header['Content-Transfer-Encoding']) && ($header['Content-Transfer-Encoding'] <> '8bit'))
-    echo "<tr><td>Content-Transfer-Encoding</td><td>",htmlentities($header['Content-Transfer-Encoding']),"</td></tr>\n";
+         "<td>",showRecipients($headers['Cc']),"</td></tr>\n";
+  echo "<tr><td>Subject</td><td>",htmlentities($headers['Subject']),"</td></tr>\n";
+  echo "<tr><td>Content-Type</td><td>",htmlentities($headers['Content-Type'] ?? 'Non défini'),"</td></tr>\n";
+  if (isset($headers['Content-Transfer-Encoding']) && ($headers['Content-Transfer-Encoding'] <> '8bit'))
+    echo "<tr><td>Content-Transfer-Encoding</td><td>",htmlentities($headers['Content-Transfer-Encoding']),"</td></tr>\n";
   echo "<tr><td>Body</td><td>",$msg->body()->asHtml(isset($_GET['debug'])),"</td></tr>\n";
   echo "</table>\n";
   echo "<a href='?action=dump&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]'>dump</a><br>\n";
@@ -187,7 +188,7 @@ if ($_GET['action'] == 'sortEmail') { // tri les adresses par nom de domaine et 
   echo "<h2>Tri des adresses de $_GET[header] par domaine et si possible par nom</h2>\n";
   echo "Les libellés sont conservés mais un seul par adresse.</p>\n";
   $emails = []; // [ domain => [ email => [ label ] ] ]
-  foreach (Message::explodeEmails($msg->short_header()[$_GET['header']]) as $recipient) {
+  foreach (Message::explodeEmails($msg->short_headers()[$_GET['header']]) as $recipient) {
     if (preg_match('!^(.*)<([-.a-zA-Z0-9]+)@([-.a-zA-Z0-9]+)>$!', $recipient, $matches)) {
       $label = $matches[1];
       $name = $matches[2];
@@ -228,7 +229,7 @@ if ($_GET['action'] == 'sortEmail') { // tri les adresses par nom de domaine et 
   //echo "<pre>"; print_r($emails);
   
   echo "<h2>Chaine initiale</h2>\n",
-       htmlentities($msg->short_header()[$_GET['header']]),"</p>\n";
+       htmlentities($msg->short_headers()[$_GET['header']]),"</p>\n";
   die();
 }
 
@@ -252,7 +253,7 @@ if ($_GET['action'] == 'listContentType') { // liste les Content-Type contenu da
   $max = $_GET['max'] ?? 10;
   $contentTypes = [];
   foreach (Message::parse(__DIR__.'/mboxes/'.$mbox, $start, $max) as $msg) {
-    $contentType = $msg->short_header()['Content-Type'] ?? '';
+    $contentType = $msg->short_headers()['Content-Type'] ?? '';
     //echo "$contentType\n";
     if (preg_match('!^(.*boundary=")[^"]*(".*)$!', $contentType, $matches))
       $contentType = "$matches[1]---$matches[2]";
@@ -280,8 +281,8 @@ if ($_GET['action'] == 'searchByContentType') {
   echo "searchByContentType <b>$sContentType</b><br>\n";
   echo "<table border=1><th>G</th><th>From</th><th>Date</th><th>Subject</th>\n";
   foreach (Message::parse(__DIR__.'/mboxes/'.$mbox, $start, $_GET['max'] ?? 10) as $msg) {
-    $header = $msg->short_header();
-    $contentType = $header['Content-Type'] ?? '';
+    $headers = $msg->short_headers();
+    $contentType = $headers['Content-Type'] ?? '';
     if (substr($sContentType, 0, 10) == 'multipart/') {
       if (!preg_match("!^$sContentType$!", $contentType)) continue;
     }
@@ -290,10 +291,10 @@ if ($_GET['action'] == 'searchByContentType') {
     }
     echo "<tr>";
     echo "<td><a href='?action=get&amp;mbox=$mbox&amp;offset=",$msg->offset(),"'>G</a></td>";
-    echo "<td>",htmlentities($header['From']),"</td>";
-    echo "<td>",htmlentities($header['Date']),"</td>";
-    echo "<td>",htmlentities($header['Subject']),"</td>";
-    //echo "<td><pre>",json_encode($msg->short_header(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"</pre></td>";
+    echo "<td>",htmlentities($headers['From']),"</td>";
+    echo "<td>",htmlentities($headers['Date']),"</td>";
+    echo "<td>",htmlentities($headers['Subject']),"</td>";
+    //echo "<td><pre>",json_encode($msg->short_headers(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"</pre></td>";
     echo "</tr>\n";
   }
   echo "</table>\n";
