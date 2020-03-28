@@ -17,9 +17,9 @@ journal: |
 functions:
 */
 
-//$mbox = '0entrant';
+$mbox = '0entrant';
 //$mbox = 'Sent';
-$mbox = '../baltest';
+//$mbox = '../baltest';
 //$mbox = '../listes/ogc.mbox';
 
 $path = __DIR__.'/mboxes/'.$mbox;
@@ -40,8 +40,8 @@ if ($argc == 1) { // menu
   echo "  - buildIdx : fabrique un index pour la Bal $mbox\n";
   echo "  - parseWithIdx [{start} [{max}]] : liste les en-têtes avec parseWithIdx()\n";
   echo "  - listContentTypes : liste les Content-Type à partir de fichier Mbox\n";
-  echo "  - findSimplContentType {simplContentType} : retrouve les Content-Type détaillés à partir du simplifié\n";
   echo "  - parseContentTypes : analyse les Content-Type\n";
+  echo "  - listStruct : liste les structures possibles des messages\n";
   die();
 }
 
@@ -161,50 +161,18 @@ if ($argv[1] == 'parseWithIdx') { // Test parseWithIdx
   die();
 }
 
-/*class Tree {
-  protected $label; // string
-  protected $children; // [ Tree ]
-  
-  function __construct(string $label, array $children) {
-    $this->label = $label;
-    $this->children = $children;
-  }
-  
-  function show(int $level=0) {
-    echo str_repeat('----', $level),$this->label,"\n";
-    foreach ($this->children as $child) {
-      $child->show($level+1);
-    }
-  }
-};*/
-
-/*function treeOfContentTypes(string $ctype, Body $body): Tree {
-  $children = [];
-  foreach ($body->parts() as $part) {
-    //echo "part's type=",$part->type(),"\n";
-    if (!$part->isMulti()) {
-      $children[] = new Tree($part->type(), []);
-    }
-    else {
-      $children[] = treeOfContentTypes($part->type(), $part);
-    }
-  }
-  return new Tree($ctype, $children);
-  //die("FIN ligne ".__LINE__."\n");
-}*/
-
-// balayage recursif des parties pour y récupérer les ctypes
-function listOfContentTypes(&$fout, Body $body) {
-  foreach ($body->parts() as $part) {
-    fwrite($fout, $part->type()."\n");
-    if ($part->isMulti())
-      listOfContentTypes($fout, $part);
-  }
-}
+require_once 'ctype.inc.php';
 
 // liste les Content-Type et crée le fichier contentTypes.txt des libellés
 if ($argv[1] == 'listContentTypes') {
-  require_once 'ctype.inc.php';
+  
+  function listOfContentTypes(&$fout, Body $body) { // balayage recursif des parties pour y récupérer les ctypes
+    foreach ($body->parts() as $part) {
+      fwrite($fout, $part->type()."\n");
+      if ($part->isMulti())
+        listOfContentTypes($fout, $part);
+    }
+  }
 
   $start = $argv[2] ?? 0;
   $fout = fopen('contentTypes.txt', 'w');
@@ -227,7 +195,6 @@ if ($argv[1] == 'listContentTypes') {
 
 // exploite le fichier contentTypes.txt pour effectuer une analyse des différents Content-Type
 if ($argv[1] == 'parseContentTypes') {
-  require_once 'ctype.inc.php';
   
   if (!($fin = fopen('contentTypes.txt', 'r')))
     die("Erreur d'ouverture du fichier contentTypes.txt\n");
@@ -255,6 +222,123 @@ if ($argv[1] == 'parseContentTypes') {
   echo "charsets="; print_r($charsets);
   echo "Multi:\n";
   echo "subtypes="; print_r($subtypes);
+  die();
+}
+
+// liste les structures des messages, fabrique un fichier struct.txt [ {offset}\t{JSON}\n ] et en sortie un fichier [ {JSON}\n ]
+// Cela permet facilement d'une part de trier et de rendre uniques les lignes en sortie
+// et d'autre part de conserver l'offset des messages ayant produit la structure afin de le retrouver facilement
+if ($argv[1] == 'listStruct') {
+
+  if (0) { // Test du motif de remplacement
+    $json = '{"RELATED":[{"ALTERNATIVE":["plain","html"]},"image","image","image","image","image","image","image"]}';
+    $count = 1;
+    while ($count <> 0) {
+      $json = preg_replace('!"image","image\+?"]!', '"image+"]', $json, -1, $count);
+      echo "$json, count=$count\n";
+    }
+    echo "FIN: $json\n";
+    die("FIN ligne ".__LINE__."\n");
+  }
+
+  class Tree { // classe basique implémentant un arbre de string restituable facilement soit sur plusieurs lignes soit comme JSON
+    protected $label; // string
+    protected $children; // [ Tree ]
+
+    function __construct(string $label, array $children) {
+      $this->label = $label;
+      $this->children = $children;
+    }
+
+    function asArray() { // array pour un noeud, chaine pour une feuille
+      $children = [];
+      foreach ($this->children as $child)
+        $children[] = $child->asArray();
+      return $children ? [ $this->label => $children ] : $this->label;
+    }
+  
+    function show(int $level=0) {
+      echo str_repeat('----', $level),$this->label,"\n";
+      foreach ($this->children as $child) {
+        $child->show($level+1);
+      }
+    }
+  };
+
+  function simplType(string $ctype): string { // simplification du type
+    static $applications = [
+      'vnd.ms-excel' => 'xls',
+      'vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+      'vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+      'vnd.openxmlformats-officedocument.presentationml.presentation' => 'pptx',
+      'vnd.oasis.opendocument.text' => 'odt',
+      'vnd.oasis.opendocument.presentation' => 'odp',
+      'vnd.oasis.opendocument.spreadsheet' => 'ods',
+    ];
+    if (preg_match('!^multipart/([^;]+);!', $ctype, $matches))
+      return strToUpper($matches[1]);
+    elseif (preg_match('!^text/([^;]+)!', $ctype, $matches))
+      return $matches[1];
+    elseif (preg_match('!^(image)/!', $ctype, $matches))
+      return $matches[1];
+    elseif (preg_match('!^application/([^;]+)!', $ctype, $matches))
+      return $applications[$matches[1]] ?? $matches[1];
+    elseif (preg_match('!^(message)/rfc822!', $ctype, $matches))
+      return $matches[1];
+    else
+      return $ctype;
+  }
+
+  function treeOfContentTypes(string $ctype, Body $body): Tree { // balayage des parties pour créer un arbre
+    $children = [];
+    foreach ($body->parts() as $part) {
+      $type = simplType($part->type());
+      //echo "part's type=",$part->type()," -> $type\n";
+      if (!$part->isMulti()) {
+        $children[] = new Tree($type, []);
+      }
+      else {
+        $children[] = treeOfContentTypes($type, $part);
+      }
+    }
+    return new Tree($ctype, $children);
+    //die("FIN ligne ".__LINE__."\n");
+  }
+
+  if (!($fstruct = fopen('struct.txt', 'w')))
+    die("Erreur d'ouverture du fichier struct.txt\n");
+  $start = 0;
+  foreach (Message::parse($path, $start, 99999, []) as $msg) {
+    //echo "Message offset=",$msg->short_header()['offset'],"\n";
+    $contentType = $msg->short_header()['Content-Type'] ?? '';
+    if (CType::testIsMulti($contentType)) { // balaie récursivement les parties pour récupérer les ctypes
+      //echo "Content-Type=$contentType\n";
+      $body = Message::get($path, $msg->short_header()['offset'])->body();
+      //echo "treeOfContentTypes:\n";
+      //treeOfContentTypes(simplType($contentType), $body)->show();
+      $json = json_encode(treeOfContentTypes(simplType($contentType), $body)->asArray());
+      do {
+        $json = preg_replace('!"image","image\+?"]!', '"image+"]', $json, -1, $count);
+      } while ($count <> 0);
+      fprintf($fstruct, "%s\t%d\n", str_replace('"', '', $json), $msg->short_header()['offset']);
+      echo str_replace('"', '', $json),"\n";
+    }
+  }
+  fclose($fstruct);
+  die();
+}
+
+if ($argv[1] == 'findStruct') { // trouve les messages correspondant à la structure de message
+  if ($argc < 3)
+    die("Erreur paramètre struct obligatoire\n");
+  if (!($fstruct = fopen('struct.txt', 'r')))
+    die("Erreur d'ouverture du fichier struct.txt\n");
+  while ($buff = fgets($fstruct)) {
+    $buff = rtrim($buff);
+    list($json, $offset) = explode("\t", $buff);
+    if ($json == $argv[2])
+      echo "$offset\n";
+  }
   die();
 }
 

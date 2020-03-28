@@ -5,10 +5,9 @@ doc: |
   Décodage des messages présents dans le fichier.
   Affichage de la liste des messages correspondant à certains critères.
   Affichage d'un message particulier et notamment extraction des pièces jointes.
-  Recherche de messages selon certains critères.
 
   Exemples:
-    type message/rfc822:
+    message/rfc822:
       - http://localhost/rmbox/?action=get&mbox=0entrant&offset=3885060278&debug=true
       
   15128 messages
@@ -18,6 +17,7 @@ doc: |
   15128
 
   Le code pourrait être amélioré:
+    - Il faudrait un accès plus générique à une PJ, par exemple en définissant un chemin au sein d'un message.
     - en utilisant les fonctions de ctype dans mbox
     - en vérifiant que les cas recensés dans la commande parseContentTypes sont traités dans mbox
 journal: |
@@ -45,5 +45,6 @@ phpScripts:
 phpIncludes:
   - /rmbox/ctype.inc.php
   - /rmbox/mbox.inc.php
+  - /rmbox/body.inc.php
 htmlFiles:
 
