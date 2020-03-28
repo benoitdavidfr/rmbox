@@ -17,10 +17,12 @@ doc: |
   15128
 
   Le code pourrait être amélioré:
-    - Il faudrait un accès plus générique à une PJ, par exemple en définissant un chemin au sein d'un message.
     - en utilisant les fonctions de ctype dans mbox
     - en vérifiant que les cas recensés dans la commande parseContentTypes sont traités dans mbox
 journal: |
+  28/3/2020:
+    - dissociation mbox.inc.php en 2 fichiers mbox.inc.php + body.inc.php
+    - modif accès PJ
   27/3/2020:
     - amélioration de mbox.inc.php notamment de décodage des en-têtes, mutualisation de cette fonction entre Body et Message
   25/3/2020:
