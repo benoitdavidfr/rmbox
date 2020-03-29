@@ -2,27 +2,24 @@ title: rmbox - extraction et utilisation de messages à partir d'un fichier Mbox
 path: /rmbox
 doc: |
   Lecture et exploitation d'un fichier Mbox (https://fr.wikipedia.org/wiki/Mbox) généré notamment par Thunderbird
-  Décodage des messages présents dans le fichier.
+  Décodage des messages du fichier.
   Affichage de la liste des messages correspondant à certains critères.
   Affichage d'un message particulier et notamment extraction des pièces jointes.
 
-  Exemples:
-    message/rfc822:
-      - http://localhost/rmbox/?action=get&mbox=0entrant&offset=3885060278&debug=true
-      
-  15128 messages
-  $ grep -G '^From: ' mboxes/0entrant | wc -l
-  15307
-  $ grep -G '^From - ' mboxes/0entrant | wc -l
-  15128
+  Voir des exemples et bugs connus avec "http://localhost/rmbox/?action=info".
 
+  Utilise le composant Yaml installé dans le répertoire vendor par la commande "composer install".
+  
   Le code pourrait être amélioré:
     - en utilisant les fonctions de ctype dans mbox et body
     - en vérifiant que les cas recensés dans la commande parseContentTypes sont traités dans mbox et body
 journal: |
+  29/3/2020:
+    - affichage des messages inclus dans un autre message
   28/3/2020:
     - dissociation mbox.inc.php en 2 fichiers mbox.inc.php + body.inc.php
     - modif accès PJ
+    - ajout du composant Yaml de Symfony par composer, la commande "composer install" l'installe dans le répertoire vendor.
   27/3/2020:
     - amélioration de mbox.inc.php notamment de décodage des en-têtes, mutualisation de cette fonction entre Body et Message
   25/3/2020:

@@ -111,6 +111,7 @@ class Message {
   protected $headers=[]; // dictionnaire des en-têtes, [ key -> (string | liste(string)) ]
   protected $body; // texte correspondant au corps du message avec séparateur \n entre lignes
   protected $offset; // offset du message dans le fichier mbox, -1 si il s'agit d'un message inclus dans un autre
+  protected $path; // chemin d'accès à partir du message stocké dans le Mbox, s'il est stocké dans le Mbox alors []
   
   // transformation d'une liste d'adresses email sous la forme d'une chaine en une liste de chaines
   // une , est un séparateur d'adresse que si elle n'est pas à l'intérieur d'une ""
@@ -284,12 +285,12 @@ class Message {
   */
   function body(): Body {
     return Body::create(
-      $this->headers['Content-Type'] ?? '',
-      $this->body,
+      $this->headers['Content-Type'] ?? '', // string $type
+      $this->body, // string $contents
       isset($this->headers['Content-Transfer-Encoding']) ?
         ['Content-Transfer-Encoding' => $this->headers['Content-Transfer-Encoding']] :
-        [],
-      []
+        [], // array $headers
+      $this->path // array $path
     );
   }
   
@@ -311,13 +312,14 @@ class Message {
   doc: |
     Si $onlyHeaders est mis à true alors l'objet ne contiendra que ses headers permettant ainsi d'économiser de la mémoire.
   */
-  function __construct(array $text, int $offset=-1, bool $onlyHeaders=false) {
+  function __construct(array $text, int $offset=-1, bool $onlyHeaders=false, array $path=[]) {
     //echo "<pre>Message::__construct()<br>\n";
     $stext = $text; // sauvegarde de $txt
     $this->offset = $offset;
     $this->firstLine = [ array_shift($text) ]; // Suppression de la 1ère ligne d'en-tête qui est aussi le séparateur entre messages
     $this->headers = Body::extractHeaders($text);
     $this->body = $onlyHeaders ? null : implode("\n", $text);
+    $this->path = $path;
     //echo "Fin Message::__construct() "; print_r($this); echo "</pre>\n";
   }
   
@@ -346,7 +348,7 @@ class Message {
   function asHtml(bool $debug): string {
     $html = "<table border=1>\n";
     foreach ($this->short_headers() as $key => $value) {
-      $html .= "<tr><td>$key</td><td>$value</td></tr>\n";
+      $html .= "<tr><td>$key</td><td>".htmlentities($value)."</td></tr>\n";
     }
     $html .= "<tr><td>body</td><td>".$this->body()->asHtml($debug)."</td></tr>\n";
     $html .= "</table>\n";

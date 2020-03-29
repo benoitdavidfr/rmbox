@@ -1,4 +1,7 @@
 title: info diverses
+abstract: |
+  Recensement notamment de cas particuliers et de bugs en cours de traitement.
+  Ce fichier peut être affiché par http://localhost/rmbox/?action=info
 doc:
   - à noter on peut télécharger depuis Mel un ensemble de messages sous la forme d'un fichier Mbox
     Il faut pour cela sélectionner les messages puis menu contextuel
@@ -11,10 +14,10 @@ casParticuliers:
     href: http://localhost/rmbox/?action=get&mbox=0entrant&offset=3232652990
   - title: boundary définie 2 fois dans l'en-tête et en conséquence mal traitée ensuite
     href: http://localhost/rmbox/?action=get&mbox=0entrant&offset=3022287431
-bugs:
-  - title: noms de pièce jointe avec accents mal décodés
-    href: http://localhost/rmbox/?action=get&mbox=0entrant&offset=3554317573
-  - title: message incluant des messages
-    href: http://localhost/rmbox/?action=get&mbox=0entrant&offset=3885060278&debug=true
   - title: message sans champ To
     herf: http://localhost/rmbox/?action=get&mbox=0entrant&offset=2044128
+  - title: message incluant des messages
+    href: http://localhost/rmbox/?action=get&mbox=0entrant&offset=3885060278&debug=true
+bugs:
+  - title: impossible de télécharger des PJ ayant un nom avec accents mal décodés
+    href: http://localhost/rmbox/?action=get&mbox=0entrant&offset=3554317573

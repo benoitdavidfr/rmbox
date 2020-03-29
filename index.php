@@ -9,11 +9,12 @@ doc: |
 
   Une bal peut être ou non indexée. Pour l'indexer utiliser read.php buildIdx.
   Une boite est indexée permet de:
-    - connaitre le nombre de messages,
-    - se positionner efficacement vers la fin de la bal.
+    - d'afficher le nombre de messages,
+    - se positionner efficacement notamment vers la fin de la bal.
 journal: |
   27/3/2020:
     - correction bug
+    - ajout action==info et utilisation du composant Yaml de Symfony
   21/3/2020:
     - téléchargement d'une pièce jointe d'un message
     - utilisation du fichier index s'il existe ; il peut être créé par read.php
@@ -27,6 +28,8 @@ journal: |
     - code testé pour les différents formats présents en dehors des multipart
 */
 ini_set('max_execution_time', 600);
+require_once __DIR__.'/vendor/autoload.php';
+use Symfony\Component\Yaml\Yaml;
 
 // liste des mbox possibles, la première est par défaut
 $mboxes = [
@@ -49,6 +52,7 @@ $mboxes = [
 require_once __DIR__.'/mbox.inc.php';
 
 if (!isset($_GET['action'])) { // par défaut liste les messages
+  // paramètres: mbox?, start?, max?, From?, To?, Subject?
   $mbox = $_GET['mbox'] ?? $mboxes[0];
   $start = $_GET['start'] ?? 0;
   $max = $_GET['max'] ?? 10;
@@ -81,7 +85,7 @@ if (!isset($_GET['action'])) { // par défaut liste les messages
     echo "<tr>";
     echo "<td><a href='?action=get&amp;mbox=$mbox&amp;offset=",$msg->offset(),"'>M</a></td>";
     echo "<td>",htmlentities(mb_substr($headers['From'], 0, 40)),"</td>";
-    echo "<td>",htmlentities(mb_substr($headers['To'], 0, 40)),"</td>";
+    echo "<td>",isset($headers['To']) ? htmlentities(mb_substr($headers['To'], 0, 40)) : '',"</td>";
     echo "<td>",htmlentities($headers['Date']),"</td>";
     echo "<td>",htmlentities($headers['Subject']),"</td>";
     //echo "<td><pre>",json_encode($msg->short_headers(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"</pre></td>";
@@ -150,6 +154,7 @@ function showRecipients(string $recipients): string { // affichage des adresses
 }
 
 if ($_GET['action'] == 'get') { // affiche un message donné défini par son offset 
+  // paramètres: action==get, mbox, offset
   echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>get $_GET[mbox] $_GET[offset]</title></head><body>\n";
   $msg = Message::get(__DIR__.'/mboxes/'.$_GET['mbox'], $_GET['offset']);
   echo "<table border=1>\n";
@@ -174,7 +179,7 @@ if ($_GET['action'] == 'get') { // affiche un message donné défini par son off
   die();
 }
 
-// ajoute l'élément $elt au champ $key de $array
+// ajoute l'élément $elt à $array[$key1][$key2]
 function addEltToArray(array &$array, string $key1, string $key2, $elt): void {
   if (!isset($array[$key1][$key2]))
     $array[$key1][$key2] = [ $elt ];
@@ -184,6 +189,7 @@ function addEltToArray(array &$array, string $key1, string $key2, $elt): void {
 }
 
 if ($_GET['action'] == 'sortEmail') { // tri les adresses par nom de domaine et si possible par nom
+  // paramètres: action==sortEmail, mbox, offset, header
   $msg = Message::get(__DIR__.'/mboxes/'.$_GET['mbox'], $_GET['offset']);
   echo "<h2>Tri des adresses de $_GET[header] par domaine et si possible par nom</h2>\n";
   echo "Les libellés sont conservés mais un seul par adresse.</p>\n";
@@ -233,18 +239,27 @@ if ($_GET['action'] == 'sortEmail') { // tri les adresses par nom de domaine et 
   die();
 }
 
-if ($_GET['action'] == 'dlAttached') { // téléchargement d'une pièce jointe d'un message
+if ($_GET['action'] == 'dlAttached') { // téléchargement d'une pièce jointe d'un message définie par path
+  //paramètres: action==dlAttached, mbox, offset, path, debug?
   $msg = Message::get(__DIR__.'/mboxes/'.$_GET['mbox'], $_GET['offset']);
   $msg->dlAttached(explode('/', $_GET['path']), isset($_GET['debug']));
   die();
 }
 
 if ($_GET['action'] == 'dump') { // dump du message défini par son offset 
+  // paramètres: action==dump, mbox, offset
   $msg = Message::get(__DIR__.'/mboxes/'.$_GET['mbox'], $_GET['offset']);
   echo "<pre>"; print_r($msg);
   die();
 }
 
+if ($_GET['action'] == 'info') { // affichage du fichier info.yaml
+  $info = file_get_contents('info.yaml');
+  $info = Yaml::parse($info);
+  header('Content-type: application/json');
+  echo json_encode($info, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"\n";
+  die();
+}
 
 if ($_GET['action'] == 'listContentType') { // liste les Content-Type contenu dans les messages et leur fréquence 
   //echo "<pre>";

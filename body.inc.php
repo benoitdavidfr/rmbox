@@ -14,6 +14,8 @@ doc: |
       - une alternative entre plusieurs éléments, typiquement un texte de message en plain/text et en Html (classe Alternative)
       - un ensemble d'éléments liés, typiquement un texte Html avec des images associées en ligne (classe Related)
 journal: |
+  29/3/2020:
+    - affichage des messages inclus dans un autre message
   28/3/2020:
     - création du fichier à partir de mbox.inc.php
     - modification de Body::extractHeaders() pour mieux gérer les erreurs d'unicité de header
@@ -54,7 +56,7 @@ abstract class Body {
   ];
   protected $type; // string - le type MIME du contenu
   protected $headers=[]; // [ key -> (string | [ string ]) ] - les autres en-têtes
-  protected $contents; // string - le contenu comme chaine d'octets évent. décodé en fonction de Content-Transfer-Encoding
+  protected $contents; // string - le contenu du body comme chaine d'octets
   protected $path; // chemin d'accès à partir du message stocké dans le fichier Mbox
   
   // crée un nouveau Body avec choix de la classe en fonction du type
@@ -158,7 +160,7 @@ abstract class Body {
   }*/
   
   // recopie les 4 paramètres dans les champs de l'objet
-  function __construct(string $type, string $contents, array $headers, $path) {
+  function __construct(string $type, string $contents, array $headers, array $path) {
     //echo "Body::__construct(type=$type, contents, headers)<br>\n";
     $this->type = $type;
     $this->contents = $contents;
@@ -218,7 +220,7 @@ class MonoPart extends Body {
   // retourne le code Html d'affichage de l'objet
   function asHtml(bool $debug): string {
     if ($debug) {
-      $html = "<b>MonoPart::asHtml()</b>path=".implode('/', $this->path)."<br>\n";
+      $html = "<b>MonoPart</b>, path=".implode('/', $this->path)."<br>\n";
       $html .= "<table border=1>\n";
       //foreach ($this->headers as $key => $value)
         //$html .= "<tr><td>H:$key</td><td>$value</td></tr>\n";
@@ -383,7 +385,7 @@ methods:
 class Mixed extends MultiPart {
   // retourne le code Html d'affichage de l'objet
   function asHtml(bool $debug): string {
-    $html = $debug ? "Mixed::asHtml()<br>\n" : '';
+    $html = $debug ? "<b>Mixed</b>, path=".implode('/', $this->path)."<br>\n" : '';
     $html .= "<table border=1>\n";
     foreach ($this->parts() as $part) {
       $html .= "<tr><td>".$part->asHtml($debug)."</td></tr>\n";
@@ -408,7 +410,7 @@ methods:
 class Alternative extends MultiPart {
   function asHtml(bool $debug): string {
     if ($debug) {
-      $html = "<b>Alternative::asHtml()</b>path=".implode('/', $this->path)."<br>\n";
+      $html = "<b>Alternative</b>, path=".implode('/', $this->path)."<br>\n";
       $html .= "<table border=1>\n";
       foreach ($this->parts() as $part) {
         $html .= "<tr><td>".$part->asHtml($debug)."</td></tr>\n";
@@ -435,7 +437,7 @@ methods:
 */
 class Related extends MultiPart {
   function asHtml(bool $debug): string {
-    $html = $debug ? 'Related::asHtml()' : '';
+    $html = $debug ? "<b>Related</b>, path=".implode('/', $this->path)."<br>\n" : '';
     $html .= "<table border=1>\n";
     foreach ($this->parts() as $part) {
       $html .= "<tr><td>".$part->asHtml($debug)."</td></tr>\n";
@@ -445,12 +447,18 @@ class Related extends MultiPart {
   }
 };
 
-// je suppose qu'il s'agit d'un message complet inclus dans un autre message
+/*PhpDoc: classes
+name: MessageRFC822
+title: class MessageRFC822 extends Body - Message inclus dans un autre message
+doc: |
+methods:
+*/
 class MessageRFC822 extends Body {
   function asHtml(bool $debug): string {
-    $html = "MessageRFC822::asHtml()<br>\n";
+    $html = "<b>MessageRFC822</b>, path=".implode('/', $this->path)."<br>\n";
+    //foreach (explode("\n", $this->contents) as $no => $line) echo "$no> ",htmlentities($line),"<br>\n";
     //$html .= '<pre>'.htmlentities($this->contents)."</pre>\n";
-    $message = new Message(explode("\n", $this->contents));
+    $message = new Message(array_merge(['MessageRFC822'], explode("\n", $this->contents)), -1, false, $this->path);
     $html .= $message->asHtml($debug);
     return $html;
   }
