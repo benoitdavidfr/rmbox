@@ -154,9 +154,11 @@ function showRecipients(string $recipients): string { // affichage des adresses
 }
 
 if ($_GET['action'] == 'get') { // affiche un message donné défini par son offset 
-  // paramètres: action==get, mbox, offset
+  // paramètres: action==get, mbox, offset, path?
+  if (!isset($_GET['mbox'])) die("Erreur paramètre mbox obligatoire");
+  if (!isset($_GET['offset'])) die("Erreur paramètre offset obligatoire");
   echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>get $_GET[mbox] $_GET[offset]</title></head><body>\n";
-  $msg = Message::get(__DIR__.'/mboxes/'.$_GET['mbox'], $_GET['offset']);
+  $msg = Message::get(__DIR__.'/mboxes/'.$_GET['mbox'], $_GET['offset'], isset($_GET['path']) ? explode('/', $_GET['path']) : []);
   echo "<table border=1>\n";
   $headers = $msg->short_headers();
   echo "<tr><td>Date</td><td>",htmlentities($headers['Date']),"</td></tr>\n";
@@ -175,6 +177,8 @@ if ($_GET['action'] == 'get') { // affiche un message donné défini par son off
     echo "<tr><td>Content-Transfer-Encoding</td><td>",htmlentities($headers['Content-Transfer-Encoding']),"</td></tr>\n";
   echo "<tr><td>Body</td><td>",$msg->body()->asHtml(isset($_GET['debug'])),"</td></tr>\n";
   echo "</table>\n";
+  if (!isset($_GET['debug']))
+    echo "<a href='?action=get&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]&amp;debug=true'>debug</a>\n";
   echo "<a href='?action=dump&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]'>dump</a><br>\n";
   die();
 }

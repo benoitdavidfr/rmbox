@@ -259,12 +259,14 @@ class Message {
   
   /*PhpDoc: methods
   name: get
-  title: "static function get(string $path, int $offset): self  - retourne le message commencant à l'offset défini en paramètre"
+  title: "static function get(string $path, int $offset): self  - retourne le message défini par les paramètres"
   doc: |
+    Si $partpath vaut [] alors retourne le message du fichier $mboxpath commencant à l'offset
+    Sinon retourne le message correspondant 
   */
-  static function get(string $path, int $offset): self {
-    if (!($mbox = @fopen($path, 'r')))
-      throw new Exception("Erreur d'ouverture du fichier mbox $path");
+  static function get(string $mboxpath, int $offset, array $partpath=[]): self {
+    if (!($mbox = @fopen($mboxpath, 'r')))
+      throw new Exception("Erreur d'ouverture du fichier mbox $mboxpath");
     fseek($mbox, $offset);
     $precLine = false; // la ligne précédente
     $msgTxt = []; // le message sous la forme d'une liste de lignes rtrimmed
@@ -275,7 +277,28 @@ class Message {
       $msgTxt[] = $line; 
       $precLine = $line;
     }
-    return (new Message($msgTxt, $offset));
+    $msg = new Message($msgTxt, $offset);
+    if (!$partpath)
+      return $msg;
+    else
+      return $msg->body()->subMessage($partpath);
+  }
+    
+  /*PhpDoc: methods
+  name: __construct
+  title: "function __construct(array $txt, int $offset, bool $onlyHeaders=false) - fabrique un objet Message"
+  doc: |
+    Si $onlyHeaders est mis à true alors l'objet ne contiendra que ses headers permettant ainsi d'économiser de la mémoire.
+  */
+  function __construct(array $text, int $offset=-1, bool $onlyHeaders=false, array $path=[]) {
+    //echo "<pre>Message::__construct()<br>\n";
+    $stext = $text; // sauvegarde de $txt
+    $this->offset = $offset;
+    $this->firstLine = [ array_shift($text) ]; // Suppression de la 1ère ligne d'en-tête qui est aussi le séparateur entre messages
+    $this->headers = Body::extractHeaders($text);
+    $this->body = $onlyHeaders ? null : implode("\n", $text);
+    $this->path = $path;
+    //echo "Fin Message::__construct() "; print_r($this); echo "</pre>\n";
   }
   
   /*PhpDoc: methods
@@ -304,23 +327,6 @@ class Message {
       throw new Exception("Erreur offset interdit");
     else
       return $this->offset;
-  }
-    
-  /*PhpDoc: methods
-  name: __construct
-  title: "function __construct(array $txt, int $offset, bool $onlyHeaders=false) - fabrique un objet Message"
-  doc: |
-    Si $onlyHeaders est mis à true alors l'objet ne contiendra que ses headers permettant ainsi d'économiser de la mémoire.
-  */
-  function __construct(array $text, int $offset=-1, bool $onlyHeaders=false, array $path=[]) {
-    //echo "<pre>Message::__construct()<br>\n";
-    $stext = $text; // sauvegarde de $txt
-    $this->offset = $offset;
-    $this->firstLine = [ array_shift($text) ]; // Suppression de la 1ère ligne d'en-tête qui est aussi le séparateur entre messages
-    $this->headers = Body::extractHeaders($text);
-    $this->body = $onlyHeaders ? null : implode("\n", $text);
-    $this->path = $path;
-    //echo "Fin Message::__construct() "; print_r($this); echo "</pre>\n";
   }
   
   /*PhpDoc: methods

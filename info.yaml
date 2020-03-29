@@ -7,6 +7,8 @@ doc:
     Il faut pour cela sélectionner les messages puis menu contextuel
     puis Plus / Télécharger... / Format mbox (.zip) 
 exemples:
+  - title: accueil
+    href: http://localhost/rmbox/
   - title: message avec PJ
     href: http://localhost/rmbox/?action=get&mbox=0entrant&offset=822222
 casParticuliers:

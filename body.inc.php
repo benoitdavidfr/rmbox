@@ -394,6 +394,12 @@ class Mixed extends MultiPart {
     return $html;
   }
   
+  function subMessage(array $path): Message {
+    echo "<b>Mixed::subMessage(path=",implode('/', $path),")</b><br>\n";
+    $nopart = array_shift($path);
+    return $this->parts()[$nopart]->subMessage($path);
+  }
+  
   function dlAttached(array $path, bool $debug) {
     //echo "Mixed::dlAttached(",implode('/', $path),")<br>\n";
     $nopart = array_shift($path);
@@ -454,13 +460,37 @@ doc: |
 methods:
 */
 class MessageRFC822 extends Body {
+  // le message contenu dans le Body
+  function message(): Message {
+    return new Message(array_merge(['MessageRFC822'], explode("\n", $this->contents)), -1, false, $this->path);
+  }
+  
   function asHtml(bool $debug): string {
-    $html = "<b>MessageRFC822</b>, path=".implode('/', $this->path)."<br>\n";
+    $path = implode('/', $this->path);
+    $html = "<a href='?action=get&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]&amp;path=".urlencode($path)."'>"
+           ."<b>MessageRFC822</b>, path=$path</a><br>\n";
     //foreach (explode("\n", $this->contents) as $no => $line) echo "$no> ",htmlentities($line),"<br>\n";
     //$html .= '<pre>'.htmlentities($this->contents)."</pre>\n";
-    $message = new Message(array_merge(['MessageRFC822'], explode("\n", $this->contents)), -1, false, $this->path);
-    $html .= $message->asHtml($debug);
+    //Message::__construct() attent une ligne avant les headers, raison pour laquelle il faut ajouter une ligne
+    if (1) { // affichage résumé du message
+      $headers = $this->message()->short_headers();
+      $html .= "<table border=1>\n";
+      $html .= "<tr><td>Date</td><td>$headers[Date]</td></tr>\n";
+      $html .= "<tr><td>From</td><td>".$headers['From']."</td></tr>\n";
+      $html .= "</table>\n";
+    }
+    else { // affichage complet du message
+      $html .= $this->message()->asHtml($debug);
+    }
     return $html;
+  }
+  
+  function subMessage(array $path): Message {
+    echo "<b>MessageRFC822::subMessage(path=",implode('/', $path),")</b><br>\n";
+    if (!$path)
+      return $this->message();
+    else
+      throw new Exception("Pas de cas connu");
   }
   
   // Pour un fichier attaché renvoie son nom sinon null
