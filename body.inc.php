@@ -467,19 +467,27 @@ class MessageRFC822 extends Body {
   
   function asHtml(bool $debug): string {
     $path = implode('/', $this->path);
-    $html = "<a href='?action=get&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]&amp;path=".urlencode($path)."'>"
-           ."<b>MessageRFC822</b>, path=$path</a><br>\n";
-    //foreach (explode("\n", $this->contents) as $no => $line) echo "$no> ",htmlentities($line),"<br>\n";
-    //$html .= '<pre>'.htmlentities($this->contents)."</pre>\n";
+    $href = "?action=get&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]&amp;path=".urlencode($path);
     //Message::__construct() attent une ligne avant les headers, raison pour laquelle il faut ajouter une ligne
     if (1) { // affichage résumé du message
       $headers = $this->message()->short_headers();
-      $html .= "<table border=1>\n";
-      $html .= "<tr><td>Date</td><td>$headers[Date]</td></tr>\n";
-      $html .= "<tr><td>From</td><td>".$headers['From']."</td></tr>\n";
-      $html .= "</table>\n";
+      $html = "<table border=1><tr>\n";
+      $html .= "<td><a href='$href'>M</a></td>\n";
+      $html .= "<td>Date: $headers[Date]</td>\n";
+      $html .= "<td>From: ".$headers['From']."</td>\n";
+      $html .= "</tr></table>\n";
+    }
+    elseif (0) { // Affichage du texte brut
+      $html = "<a href='$href'><b>MessageRFC822</b>, path=$path</a><br>\n";
+      $html .= '<pre>'.htmlentities($this->contents)."</pre>\n";
+    }
+    elseif (0) { // affichage du texte ligne par ligne
+      $html = "<a href='$href'><b>MessageRFC822</b>, path=$path</a><br>\n";
+      foreach (explode("\n", $this->contents) as $no => $line)
+        echo "$no> ",htmlentities($line),"<br>\n";
     }
     else { // affichage complet du message
+      $html = "<a href='$href'><b>MessageRFC822</b>, path=$path</a><br>\n";
       $html .= $this->message()->asHtml($debug);
     }
     return $html;

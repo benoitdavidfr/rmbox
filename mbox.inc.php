@@ -4,13 +4,13 @@ name: mbox.inc.php
 title: mbox.inc.php - définition de classes pour gérer les messages d'un fichier Mbox
 doc: |
   La classe Message gère un message et définit les fonctions d'analyse d'un ficher Mbox pour en extraire un ou plusieurs messages.
-  Un message est composé d'en-têtes et d'un corps.
-  Ce corps est géré par la classe abstraite Body qui peut être utilisée récursivement. Voir body.inc.php
+  Un message est composé d'en-têtes et d'un corps, géré par la classe abstraite Body ; voir body.inc.php.
+  Un corps peut contenir des messages.
   La classe Index gère l'index des messages au sein d'un fichier Mbox.
 
   message ::= header+ + body
   header ::= content-type | Content-Transfer-Encoding | ...
-  body ::= monoPart | multiPart
+  body ::= monoPart | multiPart | messageRFC822
   monoPart ::= content-type + Content-Transfer-Encoding + contents
   content-type ::= string
   Content-Transfer-Encoding ::= string
@@ -21,6 +21,7 @@ doc: |
   alternative ::= body+
   related  ::= text/html + inlineimage+
   inlineimage ::= content-type + Content-ID + contents
+  messageRFC822 ::= message
 
 journal: |
   28/3/2020:
@@ -98,19 +99,23 @@ name: Message
 title: classe Message - gestion d'un message ainsi que son extraction à partir d'un fichier Mbox
 doc: |
   Un message est composé d'en-têtes (header) et d'un corps (body) géré par la classe Body.
-  Il est contenu dans un fichier Mbox à un certain décalage par rapport au début du fichier.
+  Soit il est contenu dans un fichier Mbox à un certain décalage (offset) par rapport au début du fichier ;
+  soit il est inclus dans un autre message, dans ce cas offset==-1 et path indique le chemin à l'intérieur du message
+  racine, cad du message stocké dans le fichier Mbox.
 
   class Message {
-    protected $header=[]; // dictionnaire des en-têtes, key -> liste(string)
+    protected $firstLine = ''; // recopie de la première ligne qui constitue le séparateur entre messages dans le fichier Mbox
+    protected $headers=[]; // dictionnaire des en-têtes, [ key -> (string | liste(string)) ]
     protected $body; // texte correspondant au corps du message avec séparateur \n entre lignes
-    protected $offset; // offset du message dans le fichier Mbox
+    protected $offset; // offset du message dans le fichier mbox, -1 s'il s'agit d'un message inclus dans un autre
+    protected $path; // chemin d'accès à partir du message stocké dans le Mbox, s'il est stocké dans le Mbox alors []
 methods:
 */
 class Message {
-  protected $firstLine = ''; // recopie de la première ligne
+  protected $firstLine = ''; // recopie de la première ligne qui constitue le séparateur entre messages dans le fichier Mbox
   protected $headers=[]; // dictionnaire des en-têtes, [ key -> (string | liste(string)) ]
   protected $body; // texte correspondant au corps du message avec séparateur \n entre lignes
-  protected $offset; // offset du message dans le fichier mbox, -1 si il s'agit d'un message inclus dans un autre
+  protected $offset; // offset du message dans le fichier mbox, -1 s'il s'agit d'un message inclus dans un autre
   protected $path; // chemin d'accès à partir du message stocké dans le Mbox, s'il est stocké dans le Mbox alors []
   
   // transformation d'une liste d'adresses email sous la forme d'une chaine en une liste de chaines
@@ -144,7 +149,7 @@ class Message {
       return $email;
   }
   
-  // detection du début d'un nouveau message avec $line
+  // detection du séparateur entre messages qui marque le début d'un nouveau message avec $line
   // Gestion d'un bug dans le fichier des messages:
   // Lorsque le calendrier insère un message, celui-ci ne se termine pas par une ligne vide mais par une ligne boundary
   static function isStartOfMessage(string $precLine, string $line): bool {
@@ -161,6 +166,7 @@ class Message {
   title: "static function parse(string $path, int &$start, int $maxNbre=10, array $criteria=[]): \\Generator -  retourne les premiers messages respectant les critères"
   doc: |
     Le paramètre $start est retourné avec la valeur à utiliser dans l'appel suivant ou -1 si le fichier a été entièrement parcouru.
+    Si $maxNbre vaut -1 alors pas de limire de nbre de messages retournés
     C'est la méthode la plus simple pour parcourir un fichier Mbox mais elle n'est pas très efficace.
     2 solutions pour un parcours plus efficace:
       - si on connait l'offset du message de départ alors utiliser la méthode parseUsingOffset()
@@ -181,9 +187,11 @@ class Message {
           $msg = new Message($msgTxt, $offset, true);
           if ($msg->match($criteria)) {
             yield $msg;
-            if (--$maxNbre <= 0) {
-              $start = $no + 1;
-              return;
+            if ($maxNbre <> -1) {
+              if (--$maxNbre <= 0) {
+                $start = $no + 1;
+                return;
+              }
             }
           }
         }
@@ -225,6 +233,7 @@ class Message {
     Le paramètre $offset est retourné avec la valeur à utiliser dans l'appel suivant ou -1 si le fichier a été entièrement parcouru
     Le paramètre $start est incrémenté du nombre de messages parcourus, qu'ils soient sélectionnés ou non ;
     il n'est pas utilisé pour sauter des messages.
+    Si le paramètre $maxNbre vaut -1 alors sont retournés tous les messages jusqu'à la fin du fichier.
   */
   static function parseUsingOffset(string $path, int &$offset, int &$start, int $maxNbre=10, array $criteria=[]): \Generator {
     if (!($mbox = @fopen($path, 'r')))
@@ -240,8 +249,10 @@ class Message {
         $offset = ftell($mbox) - strlen($iline); // l'offset du message suivant
         if ($msg->match($criteria)) {
           yield $msg;
-          if (--$maxNbre <= 0) {
-            return;
+          if ($maxNbre <> -1) {
+            if (--$maxNbre <= 0) {
+              return;
+            }
           }
         }
         $msgTxt = [];
@@ -259,10 +270,10 @@ class Message {
   
   /*PhpDoc: methods
   name: get
-  title: "static function get(string $path, int $offset): self  - retourne le message défini par les paramètres"
+  title: "static function get(string $path, int $offset, array $partpath=[]): self  - retourne le message défini par les paramètres"
   doc: |
     Si $partpath vaut [] alors retourne le message du fichier $mboxpath commencant à l'offset
-    Sinon retourne le message correspondant 
+    Sinon retourne le message inclus dans le message du fichier $mboxpath commencant à l'offset correspondant au $partpath
   */
   static function get(string $mboxpath, int $offset, array $partpath=[]): self {
     if (!($mbox = @fopen($mboxpath, 'r')))
@@ -398,7 +409,7 @@ class Message {
     return true;
   }
   
-  // télécharge une pièce jointe
+  // télécharge la pièce jointe définie par son chemin
   function dlAttached(array $path, bool $debug) { $this->body()->dlAttached($path, $debug); }
 }
 

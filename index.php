@@ -172,9 +172,11 @@ if ($_GET['action'] == 'get') { // affiche un message donné défini par son off
     echo "<tr><td><a href='?action=sortEmail&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]&amp;header=Cc'>Cc</a></td>",
          "<td>",showRecipients($headers['Cc']),"</td></tr>\n";
   echo "<tr><td>Subject</td><td>",htmlentities($headers['Subject']),"</td></tr>\n";
-  echo "<tr><td>Content-Type</td><td>",htmlentities($headers['Content-Type'] ?? 'Non défini'),"</td></tr>\n";
-  if (isset($headers['Content-Transfer-Encoding']) && ($headers['Content-Transfer-Encoding'] <> '8bit'))
-    echo "<tr><td>Content-Transfer-Encoding</td><td>",htmlentities($headers['Content-Transfer-Encoding']),"</td></tr>\n";
+  if (isset($_GET['debug'])) {
+    echo "<tr><td>Content-Type</td><td>",htmlentities($headers['Content-Type'] ?? 'Non défini'),"</td></tr>\n";
+    if (isset($headers['Content-Transfer-Encoding']) && ($headers['Content-Transfer-Encoding'] <> '8bit'))
+      echo "<tr><td>Content-Transfer-Encoding</td><td>",htmlentities($headers['Content-Transfer-Encoding']),"</td></tr>\n";
+  }
   echo "<tr><td>Body</td><td>",$msg->body()->asHtml(isset($_GET['debug'])),"</td></tr>\n";
   echo "</table>\n";
   if (!isset($_GET['debug']))
