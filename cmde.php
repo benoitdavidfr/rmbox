@@ -4,8 +4,10 @@ name: cmde.php
 title: cmde.php - exploitation d'un fichier Mbox en mode ligne de commande
 doc: |
 journal: |
+  30/3/2020:
+    - transfert Message::struct() dans Message
   26/3/2020:
-    - ajout de la commande listContentType en lien avce ctype.inc.php
+    - ajout de la commande listContentType en lien avec ctype.inc.php
   25/3/2020:
     - ajout de la création d'un index
   21/3/2020:
