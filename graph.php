@@ -1,8 +1,9 @@
 <?php
 /*PhpDoc:
 name: graph.php
-title: graph.php - génère en sortie un fichier avec une ligne par adresse dans un mel en entrée et un poids associé
+title: graph.php - réflexion sur l'utilisation du graphe entre adresses défini par les messages
 doc: |
+  génère en sortie un fichier avec une ligne par adresse dans un mel en entrée et un poids associé
 */
 require_once __DIR__.'/mbox.inc.php';
 

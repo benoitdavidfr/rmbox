@@ -1,7 +1,7 @@
 <?php
 /*PhpDoc:
 name: mbox.inc.php
-title: mbox.inc.php - définition de classes pour gérer les messages d'un fichier Mbox
+title: mbox.inc.php - définition des classes Message et IndexFile pour gérer les messages d'un fichier Mbox
 doc: |
   La classe Message gère un message et définit les fonctions d'analyse d'un ficher Mbox pour en extraire un ou plusieurs messages.
   Un message est composé d'en-têtes et d'un corps, géré par la classe abstraite Body ; voir body.inc.php.
@@ -411,6 +411,19 @@ class Message {
   
   // télécharge la pièce jointe définie par son chemin
   function dlAttached(array $path, bool $debug) { $this->body()->dlAttached($path, $debug); }
+  
+  // Renvoie la struct d'un message sous la forme d'un arbre de types simplifiés codé en JSON sans "
+  function struct(): string {
+    $json = json_encode($this->body()->treeOfContentTypes()->asArray());
+    $struct = str_replace('"', '', $json);
+    do {
+      $struct = preg_replace('!image,image\+?!', 'image+', $struct, -1, $count);
+    } while ($count <> 0);
+    do {
+      $struct = preg_replace('!doc,doc\+?!', 'doc+', $struct, -1, $count);
+    } while ($count <> 0);
+    return $struct;
+  }
 }
 
 

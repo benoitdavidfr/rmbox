@@ -24,6 +24,7 @@ journal: |
 functions:
 classes:
 */
+require_once __DIR__.'/tree.inc.php';
 
 
 /*PhpDoc: classes
@@ -70,7 +71,7 @@ abstract class Body {
       return new Alternative($type, $contents, $headers, $path);
     elseif (substr($type, 0, 17) == 'multipart/related')
       return new Related($type, $contents, $headers, $path);
-    elseif ($type == 'message/rfc822')
+    elseif (substr($type, 0, 14) == 'message/rfc822')
       return new MessageRFC822($type, $contents, $headers, $path);
     else
       return new MonoPart($type, $contents, $headers, $path);
@@ -136,28 +137,33 @@ abstract class Body {
     return $headers;
   }
   
-  /*// crée un body défini par un texte passé sous la forme d'une liste de chaines qui commence par une liste de headers
-  static function createFromPart(array $text): Body {
-    //echo "<pre>Body::newFromPart(text="; print_r($text); echo ")</pre>\n";
-    if (!$text) {
-      //echo "<b>return</b> empty Body<br>\n";
-      return new MonoPart('', '', []);
-    }
-    $headers = Body::extractHeaders($text);
-    $type = $headers['Content-Type'] ?? '';
-    unset($headers['Content-Type']);
-    if (preg_match('!^multipart/(mixed|alternative|related); +boundary="([^"]*)"!', $type)) {
-      //echo "<b>return</b> Body::new($type, text)<br>\n";
-      return Body::create($type, implode("\n", $text), $headers);
-    }
-    elseif ($type == 'message/rfc822') {
-      return Body::create($type, implode("\n", $text), $headers);
-    }
-    else {
-      //echo "<b>return</b> MonoPart()<br>\n";
-      return new MonoPart($type, implode("\n", $text), $headers);
-    }
-  }*/
+  static function simplType(string $ctype): string { // simplification du type
+    static $applications = [
+      'pdf' => 'doc',
+      'vnd.ms-word' => 'doc',
+      'vnd.ms-powerpoint' => 'doc',
+      'msword' => 'doc',
+      'vnd.ms-excel' => 'doc',
+      'vnd.openxmlformats-officedocument.wordprocessingml.document' => 'doc',
+      'vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'doc',
+      'vnd.openxmlformats-officedocument.presentationml.presentation' => 'doc',
+      'vnd.oasis.opendocument.text' => 'doc',
+      'vnd.oasis.opendocument.presentation' => 'doc',
+      'vnd.oasis.opendocument.spreadsheet' => 'doc',
+    ];
+    if (preg_match('!^multipart/([^;]+);!', $ctype, $matches))
+      return strToUpper($matches[1]);
+    elseif (preg_match('!^text/([^;]+)!', $ctype, $matches))
+      return $matches[1];
+    elseif (preg_match('!^(image|video)/!', $ctype, $matches))
+      return $matches[1];
+    elseif (preg_match('!^application/([^;]+)!', $ctype, $matches))
+      return $applications[$matches[1]] ?? $matches[1];
+    elseif (preg_match('!^(message)/rfc822!', $ctype, $matches))
+      return $matches[1];
+    else
+      return $ctype;
+  }
   
   // recopie les 4 paramètres dans les champs de l'objet
   function __construct(string $type, string $contents, array $headers, array $path) {
@@ -172,12 +178,22 @@ abstract class Body {
   
   function isMulti() { return false; }
   
+  function parts(): array { return []; } // retourne un [ Body ]
+  
+  // balayage récursif des parties pour créer un arbre des types simplifiés
+  function treeOfContentTypes(): Tree {
+    $children = [];
+    foreach ($this->parts() as $part)
+      $children[] = $part->treeOfContentTypes();
+    return new Tree(self::simplType($this->type()), $children);
+  }
+  
   // chaque objet doit être capable de s'afficher sous la forme d'un texte HTML
   // Si et ssi $debug est vrai alors affichage d'infos détaillées de debug
   abstract function asHtml(bool $debug): string;
 
   // Pour un fichier attaché renvoie son nom sinon null
-  abstract function name(): ?string;
+  //abstract function name(): ?string;
 };
 
 /*PhpDoc: classes
@@ -198,7 +214,8 @@ class MonoPart extends Body {
     'application/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet',
     'application/vnd\.openxmlformats-officedocument\.presentationml\.presentation'
   ];
-  
+  //Warning: dans MonoPart::asHtml() Unknown Content-Type 'application/vnd.openxmlformats-officedocument.wordprocessingml.document; x-unix-mode=0600; name="20200206_note open data_Cab BPoirsonVEcolab_Etalab.docx"'
+    
   // retourne le contenu décodé en fonction du header Content-Transfer-Encoding
   function decodedContents(): string {
     //echo "<pre>this="; print_r($this); echo "</pre>\n";
@@ -265,8 +282,10 @@ class MonoPart extends Body {
         return "Warning: dans MonoPart::asHtml() Content-Transfer-Encoding == '$ctEncoding' inconnu\n";
       }
     }
-    elseif (preg_match('!^('.implode('|', self::$attachFormats).'); name=("([^"]+)"|[^;]+)!', $this->type, $matches)) {
-      $name = $matches[3] ?? $matches[2];
+    elseif (preg_match('!^('.implode('|', self::$attachFormats).');'
+                      .'( +[^n][^;]*;)?'
+                      .' +name=("([^"]+)"|[^;]+)!', $this->type, $matches)) {
+      $name = $matches[4] ?? $matches[3];
       return "<a href='?action=dlAttached&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]"
         .(isset($_GET['debug']) ? "&amp;debug=true" : '')
         ."&amp;path=".implode('/', $this->path)."'>"
@@ -314,18 +333,15 @@ methods:
 */
 abstract class MultiPart extends Body {
   function isMulti() { return true; }
-  
+
   // renvoie la boundary déduite du Content_Type
   function boundary(): string {
     $pattern = '!^multipart/(mixed|alternative|related|report);'
-        .'( +report-type=(delivery-status|disposition-notification);| +type="multipart/alternative";)?'
+        .'( +[^b][^;]*;)?'
         .' +boundary=("([^"]*)"|.*)!';
     if (preg_match($pattern, $this->type, $matches)) {
       //print_r($matches);
-      if (isset($matches[5]))
-        return $matches[5];
-      else
-        return $matches[4];
+      return $matches[4] ?? $matches[3];
     }
     else
       throw new Exception("MultiPart::boundary() impossible sur type='".$this->type."'");
@@ -359,20 +375,6 @@ abstract class MultiPart extends Body {
     //echo "<pre>parts="; print_r($parts); echo "</pre>\n";
     return $parts;
   }
-  
-  /*function asHtml(): string {
-    //return 'MultiPart::asHtml()'.'<pre>'.htmlentities($this->contents).'</pre>';
-    $html = "MultiPart::asHtml()<br>\n";
-    $html .= "<table border=1>\n";
-    foreach ($this->parts() as $part) {
-      $html .= "<tr><td>".$part->asHtml()."</td></tr>\n";
-    }
-    $html .= "</table>\n";
-    return $html;
-  }*/
-  
-  // Pour un fichier attaché renvoie son nom sinon null
-  function name(): ?string { return null; }
 };
 
 /*PhpDoc: classes
@@ -457,18 +459,23 @@ class Related extends MultiPart {
 name: MessageRFC822
 title: class MessageRFC822 extends Body - Message inclus dans un autre message
 doc: |
+  Un MessageRFC822 contient un autre Message.
+  Bien qu'un MessageRFC822 ne contient qu'un seul Body, celui du message inclus,
+  il renvoie true pour isMulti() et pour parts() un ensemble constitué du body du message inclus.
 methods:
 */
 class MessageRFC822 extends Body {
-  // le message contenu dans le Body
+  function isMulti() { return true; }
+
+  // génère le message contenu dans le Body
   function message(): Message {
+    //Message::__construct() attent une ligne avant les headers, raison pour laquelle il faut ajouter une ligne
     return new Message(array_merge(['MessageRFC822'], explode("\n", $this->contents)), -1, false, $this->path);
   }
   
   function asHtml(bool $debug): string {
     $path = implode('/', $this->path);
     $href = "?action=get&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]&amp;path=".urlencode($path);
-    //Message::__construct() attent une ligne avant les headers, raison pour laquelle il faut ajouter une ligne
     if (1) { // affichage résumé du message
       $headers = $this->message()->short_headers();
       $html = "<table border=1><tr>\n";
@@ -498,11 +505,15 @@ class MessageRFC822 extends Body {
     if (!$path)
       return $this->message();
     else
-      throw new Exception("Pas de cas connu");
+      throw new Exception("Pas de cas connu, ce serait une multiple inclusion de messages");
+  }
+  
+  function parts(): array { // retourne un [ Body ]
+    return [$this->message()->body()];
   }
   
   // Pour un fichier attaché renvoie son nom sinon null
-  function name(): ?string { return null; }
+  //function name(): ?string { return null; }
 };
 
 

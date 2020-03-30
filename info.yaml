@@ -19,7 +19,7 @@ casParticuliers:
   - title: message sans champ To
     herf: http://localhost/rmbox/?action=get&mbox=0entrant&offset=2044128
   - title: message incluant des messages
-    href: http://localhost/rmbox/?action=get&mbox=0entrant&offset=3885060278&debug=true
+    href: http://localhost/rmbox/?action=get&mbox=0entrant&offset=3885060278
 bugs:
   - title: impossible de télécharger des PJ ayant un nom avec accents mal décodés
     href: http://localhost/rmbox/?action=get&mbox=0entrant&offset=3554317573

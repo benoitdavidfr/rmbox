@@ -1,7 +1,7 @@
 <?php
 /*PhpDoc:
 name: index.php
-title: index.php - navigation dans des fichiers Mbox en mode Web
+title: index.php - navigation en mode Web dans des fichiers Mbox
 doc: |
   - liste des messages respectant certains critères
   - affichage d'un message particulier avec notamment accès aux pièces-jointes
@@ -55,7 +55,7 @@ if (!isset($_GET['action'])) { // par défaut liste les messages
   // paramètres: mbox?, start?, max?, From?, To?, Subject?
   $mbox = $_GET['mbox'] ?? $mboxes[0];
   $start = $_GET['start'] ?? 0;
-  $max = $_GET['max'] ?? 10;
+  $max = (isset($_GET['max']) && ($_GET['max'] <> '')) ? $_GET['max'] : 10;
 
   echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>list $mbox $start $max</title></head><body>\n";
   
@@ -181,6 +181,9 @@ if ($_GET['action'] == 'get') { // affiche un message donné défini par son off
   echo "</table>\n";
   if (!isset($_GET['debug']))
     echo "<a href='?action=get&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]&amp;debug=true'>debug</a>\n";
+  else
+    echo "<a href='?action=get&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]'>nodebug</a>\n";
+  echo "<a href='?action=struct&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]'>struct</a>\n";
   echo "<a href='?action=dump&amp;mbox=$_GET[mbox]&amp;offset=$_GET[offset]'>dump</a><br>\n";
   die();
 }
@@ -249,6 +252,12 @@ if ($_GET['action'] == 'dlAttached') { // téléchargement d'une pièce jointe d
   //paramètres: action==dlAttached, mbox, offset, path, debug?
   $msg = Message::get(__DIR__.'/mboxes/'.$_GET['mbox'], $_GET['offset']);
   $msg->dlAttached(explode('/', $_GET['path']), isset($_GET['debug']));
+  die();
+}
+
+if ($_GET['action'] == 'struct') { // affiche la structure du message
+  // paramètres: action==struct, mbox, offset
+  echo Message::get(__DIR__.'/mboxes/'.$_GET['mbox'], $_GET['offset'])->struct(),"<br>\n";
   die();
 }
 

@@ -11,15 +11,19 @@ doc: |
   Utilise le composant Yaml installé dans le répertoire vendor par la commande "composer install".
   
   Le code pourrait être amélioré:
+    - téléchargement de certaines PJ dont les noms ont des accents mal encodés (voir info.yaml)
     - en utilisant les fonctions de ctype dans mbox et body
     - en vérifiant que les cas recensés dans la commande parseContentTypes sont traités dans mbox et body
 journal: |
+  30/3/2020:
+    - création fichier tree.inc.php
+    - transfert de struct() dans mbox.inc.php et body.inc.php
   29/3/2020:
     - affichage des messages inclus dans un autre message
   28/3/2020:
     - dissociation mbox.inc.php en 2 fichiers mbox.inc.php + body.inc.php
     - modif accès PJ
-    - ajout du composant Yaml de Symfony par composer, la commande "composer install" l'installe dans le répertoire vendor.
+    - ajout du composant Yaml de Symfony avec la commande "composer install" qui l'installe dans le répertoire vendor.
   27/3/2020:
     - amélioration de mbox.inc.php notamment de décodage des en-têtes, mutualisation de cette fonction entre Body et Message
   25/3/2020:
@@ -45,5 +49,6 @@ phpIncludes:
   - /rmbox/ctype.inc.php
   - /rmbox/mbox.inc.php
   - /rmbox/body.inc.php
+  - /rmbox/tree.inc.php
 htmlFiles:
 
