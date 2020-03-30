@@ -3,17 +3,20 @@
 name: body.inc.php
 title: body.inc.php - définition de la classe Body et de ses sous-classes pour gérer le corps d'un message d'un fichier Mbox
 doc: |
-  La classe Message gère un message ainsi que les fonctions d'analyse d'un ficher Mbox pour en extraire un ou plusieurs messages.
-  Un message est composé d'en-têtes et d'un corps.
+  Un message (géré par la classe Message) est composé d'en-têtes et d'un corps.
   Ce corps est géré par la classe abstraite Body qui peut être utilisée récursivement.
-  Il peut être soit :
-    - composé d'une seule partie (classe MonoPart)
-    - composé de plusieurs parties (classe MultiPart) et peut alors être :
+  Il peut soit :
+    - être composé d'une seule partie (classe MonoPart)
+    - être composé de plusieurs parties (classe MultiPart) et peut alors être :
       - une composition mixte, typiquement un texte de message avec des fichiers attachés (classe Mixed)
       - une composition de type report, on utilise alors aussi la classe Mixed,
       - une alternative entre plusieurs éléments, typiquement un texte de message en plain/text et en Html (classe Alternative)
       - un ensemble d'éléments liés, typiquement un texte Html avec des images associées en ligne (classe Related)
+    - contenir un autre message (classe MessageRFC822)
 journal: |
+  30/3/2020:
+    - ajout Body::simplType() et Body::treeOfContentTypes()
+    - ajout Body::parts()
   29/3/2020:
     - affichage des messages inclus dans un autre message
   28/3/2020:
@@ -42,7 +45,7 @@ abstract class Body {
     'Content-type' => 'Content-Type',
     'CC' => 'Cc',
   ];
-  // Liste de Headers qui doivent être simples, cad que al valeur du dictionnaire est une chaine ; utilisée dans extractHeaders()
+  // Liste de Headers qui doivent être simples, cad que la valeur du dictionnaire est une chaine ; utilisée dans extractHeaders()
   const SimpleHeaderKeys = [
     'Message-ID',
     'Return-Path',
@@ -191,9 +194,6 @@ abstract class Body {
   // chaque objet doit être capable de s'afficher sous la forme d'un texte HTML
   // Si et ssi $debug est vrai alors affichage d'infos détaillées de debug
   abstract function asHtml(bool $debug): string;
-
-  // Pour un fichier attaché renvoie son nom sinon null
-  //abstract function name(): ?string;
 };
 
 /*PhpDoc: classes
