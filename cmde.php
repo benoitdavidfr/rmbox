@@ -19,12 +19,14 @@ journal: |
 functions:
 */
 
-$mbox = '0entrant';
+//$mbox = '0entrant';
 //$mbox = 'Sent';
 //$mbox = '../baltest';
 //$mbox = '../listes/ogc.mbox';
 
-$path = __DIR__.'/mboxes/'.$mbox;
+//$path = __DIR__.'/mboxes/'.$mbox;
+$mbox = '2020-03b.mbox';
+$path = __DIR__.'/mboxes2/'.$mbox;
 
 require_once __DIR__.'/mbox.inc.php';
 
@@ -134,12 +136,14 @@ function readfiles(string $dir, bool $recursive=false): array { // lecture des n
 }
 
 if ($argv[1] == 'mboxes') { // liste des Bal
-  $files = readfiles('mboxes');
-  ksort($files);
-  foreach (array_keys($files) as $filename) {
-    if (preg_match('!\.(msf)$!', $filename))
-      continue;
-    echo "$filename\n";
+  foreach (['mboxes2', 'mboxes'] as $dir) {
+    $files = readfiles($dir);
+    ksort($files);
+    foreach (array_keys($files) as $filename) {
+      if (preg_match('!\.(msf)$!', $filename))
+        continue;
+      echo "$filename\n";
+    }
   }
   die();
 }

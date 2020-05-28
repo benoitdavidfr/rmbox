@@ -14,6 +14,8 @@ doc: |
       - un ensemble d'éléments liés, typiquement un texte Html avec des images associées en ligne (classe Related)
     - contenir un autre message (classe MessageRFC822)
 journal: |
+  28/5/2020:
+    - ajout de 2 corrections dans Body::HeaderCorrections pour 'content-type' et 'content-transfer-encoding'
   30/3/2020:
     - ajout Body::simplType() et Body::treeOfContentTypes()
     - ajout Body::parts()
@@ -43,6 +45,8 @@ abstract class Body {
   // Corrections de la clé identifiant les headers d'un message ou d'un Body, utilisé dans extractHeaders()
   const HeaderCorrections = [
     'Content-type' => 'Content-Type',
+    'content-type' => 'Content-Type', // ajout 28/5/2020
+    'content-transfer-encoding' => 'Content-Transfer-Encoding', // ajout 28/5/2020
     'CC' => 'Cc',
   ];
   // Liste de Headers qui doivent être simples, cad que la valeur du dictionnaire est une chaine ; utilisée dans extractHeaders()

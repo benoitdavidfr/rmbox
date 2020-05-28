@@ -4,7 +4,7 @@ name: tree.inc.php
 title: tree.inc.php - définition de la classe Tree implémentant un arbre de string restituable facilement
 doc: |
   L'arbre doit être construit en boottom-up.
-  Une restitution JSON peut être effectuée avec a asArray().
+  Une restitution JSON peut être effectuée avec asArray().
   Show() effectue un affichage simple.
 
   class Tree {

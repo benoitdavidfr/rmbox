@@ -12,6 +12,8 @@ doc: |
     - d'afficher le nombre de messages,
     - se positionner efficacement notamment vers la fin de la bal.
 journal: |
+  28/5/2020:
+    - conversion des dates à l'affichage dans le fuseau de Paris et éviter des différences de fuseaux
   27/3/2020:
     - correction bug
     - ajout action==info et utilisation du composant Yaml de Symfony
@@ -28,12 +30,16 @@ journal: |
     - code testé pour les différents formats présents en dehors des multipart
 */
 ini_set('max_execution_time', 600);
+
 require_once __DIR__.'/vendor/autoload.php';
+require_once __DIR__.'/mbox.inc.php';
+
 use Symfony\Component\Yaml\Yaml;
 
 // liste des mbox possibles, la première est par défaut
 $mboxes = [
-  '0entrant', // messages entrants courants
+  '../mboxes2/2020-03b.mbox', // copie du dossier des mails de mars sur le webmail
+  '0entrant', // messages entrants courants lors de la sauvegarde du 13/3/2020
   'entrant201810-oct-dec',
   'entrant201807-juil-sept',
   'entrant201804-avril-juin',
@@ -49,7 +55,7 @@ $mboxes = [
   //'Sympa',  // copie des messages provenant de Sympa
 ];
 
-require_once __DIR__.'/mbox.inc.php';
+date_default_timezone_set('Europe/Paris');
 
 if (!isset($_GET['action'])) { // par défaut liste les messages
   // paramètres: mbox?, start?, max?, From?, To?, Subject?
@@ -86,7 +92,9 @@ if (!isset($_GET['action'])) { // par défaut liste les messages
     echo "<td><a href='?action=get&amp;mbox=$mbox&amp;offset=",$msg->offset(),"'>M</a></td>";
     echo "<td>",htmlentities(mb_substr($headers['From'], 0, 40)),"</td>";
     echo "<td>",isset($headers['To']) ? htmlentities(mb_substr($headers['To'], 0, 40)) : '',"</td>";
-    echo "<td>",htmlentities($headers['Date']),"</td>";
+    //echo "<td>",htmlentities($headers['Date']),"</td>";
+    // permet de convertir ttes les dates dans le fuseau de Paris et d'éviter les affichages en GMT
+    echo "<td>",date('D, d/m/y H:i', strtotime($headers['Date'])),"</td>";
     echo "<td>",htmlentities($headers['Subject']),"</td>";
     //echo "<td><pre>",json_encode($msg->short_headers(), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),"</pre></td>";
     echo "</tr>\n";
